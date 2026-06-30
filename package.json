@@ -1,0 +1,16 @@
+{
+  "name": "seedance-generator",
+  "version": "0.1.0",
+  "description": "Local web app to generate video via Seedance 2.0 (BytePlus ModelArk / fal.ai). Config-driven, key stays server-side.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@volcengine/tos-sdk": "^2.9.1"
+  }
+}

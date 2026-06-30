@@ -1,0 +1,46 @@
+# ====== Фильтр: в git попадает только код ======
+# Системный мусор
+.DS_Store
+._*
+*~
+Thumbs.db
+
+# Чужие библиотеки (качаются заново, в историю не нужны)
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Результаты сборки и публикации
+dist/
+build/
+.next/
+out/
+.wrangler/
+.deploy/
+DerivedData/
+*.xcuserstate
+**/xcuserdata/
+
+# Данные и выгрузки (это не код)
+uploads/
+*.sqlite*
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# ПАРОЛИ, КЛЮЧИ, ТОКЕНЫ — НИКОГДА не в git
+.env
+.env.*
+!.env.example
+.dev.vars
+.cf-token
+.rh_token.json
+*.pem
+*.key
+*.session
+
+# Личные настройки Claude
+.claude/settings.local.json

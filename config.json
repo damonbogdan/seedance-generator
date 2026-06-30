@@ -1,0 +1,60 @@
+{
+  "provider": "byteplus",
+  "storageDir": "~/seedance/db",
+  "purchaseUrl": "https://console.byteplus.com/ark/region:ark+ap-southeast-1/openManagement?tab=ComputerVision",
+  "fps": 24,
+  "defaults": {
+    "mode": "pro",
+    "resolution": "720p",
+    "duration": 5,
+    "aspectRatio": "16:9",
+    "audio": false,
+    "watermark": false,
+    "returnLastFrame": false
+  },
+  "ui": {
+    "modes": [
+      { "id": "pro", "label": "Pro (2.0)" },
+      { "id": "fast", "label": "Fast" },
+      { "id": "mini", "label": "Mini (Exp)" }
+    ],
+    "resolutionsByMode": {
+      "pro": ["480p", "720p", "1080p", "4k"],
+      "fast": ["480p", "720p"],
+      "mini": ["480p", "720p"]
+    },
+    "shortSides": { "480p": 480, "720p": 720, "1080p": 1080, "4k": 2160 },
+    "durationMin": 4,
+    "durationMax": 15,
+    "aspectRatios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "adaptive"],
+    "refLimits": { "images": 9, "videos": 3, "audios": 3 }
+  },
+  "pricing": {
+    "note": "Юнит-цена USD за 1K токенов. v=есть видео-реф, nv=без видео-входа (списывается больше). токены ≈ (Ш×В×fps×длит)/1024.",
+    "unitPerK": {
+      "pro":  { "480p": {"v":0.0043,"nv":0.0070}, "720p":{"v":0.0043,"nv":0.0070}, "1080p":{"v":0.0047,"nv":0.0077}, "4k":{"v":0.0040,"nv":0.0040} },
+      "fast": { "480p": {"v":0.0033,"nv":0.0056}, "720p":{"v":0.0033,"nv":0.0056} },
+      "mini": { "480p": {"v":0.0021,"nv":0.0035}, "720p":{"v":0.0021,"nv":0.0035} }
+    },
+    "packs": {
+      "pro":  "Pro: $4.30/1M (10M $43, 100M $430), мин. 7 пакетов",
+      "fast": "Fast: $3.30/1M (10M $33, 100M $330), мин. 9 пакетов",
+      "mini": "Mini: 10M $21, 14M $29.4, 100M $210, мин. 2 пакета"
+    }
+  },
+  "providers": {
+    "byteplus": {
+      "label": "BytePlus ModelArk (Seedance 2.0)",
+      "baseUrl": "https://ark.ap-southeast.bytepluses.com/api/v3",
+      "createPath": "/contents/generations/tasks",
+      "statusPath": "/contents/generations/tasks/{id}",
+      "authScheme": "Bearer",
+      "models": {
+        "pro": "dreamina-seedance-2-0-260128",
+        "fast": "dreamina-seedance-2-0-fast-260128",
+        "mini": "dreamina-seedance-2-0-mini-260128"
+      },
+      "_note": "Pro подтверждён и активирован. fast/mini требуют своих resource-pack. mini model-id сверить в Model list. Видео/аудио-рефы Ark рекомендует слать публичным URL; base64 может не пройти."
+    }
+  }
+}
