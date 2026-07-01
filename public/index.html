@@ -120,7 +120,31 @@
   table.price th:first-child,table.price td:first-child{text-align:left;color:var(--text);font-family:'DM Sans',sans-serif}
   table.price th{color:var(--text3);font-weight:500}
   .buybtn{margin-top:10px;display:inline-block;background:rgba(68,204,102,.13);border:1px solid rgba(68,204,102,.3);color:var(--green);padding:8px 13px;border-radius:8px;text-decoration:none;font-size:12px}
+  .buybtn:hover{background:rgba(68,204,102,.22)}
   .mut{font-size:12.5px;color:var(--text2);margin-top:7px}
+
+  /* ACCOUNT / EXPENSES card (per-model) */
+  .acct-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:680px){.acct-grid{grid-template-columns:1fr 1fr}}
+  .acct-stat{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;display:flex;flex-direction:column;justify-content:center}
+  .acct-k{font-size:10.5px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;font-family:'JetBrains Mono',monospace}
+  .acct-v{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--text);line-height:1.15}
+  .acct-v small{font-size:11px;color:var(--text2);font-weight:400}
+  .acct-v.big{color:var(--accent)}
+  .acct-budget{font-size:17px!important;font-weight:700;font-family:'JetBrains Mono',monospace;padding:5px 7px!important;color:var(--accent)!important}
+  .acct-bar{height:8px;background:var(--surface3);border-radius:4px;overflow:hidden;margin:15px 0 12px;border:1px solid var(--border)}
+  .acct-bar-fill{height:100%;width:0;background:var(--green);transition:width .35s,background .35s;border-radius:4px}
+  .acct-bar-fill.warn{background:var(--orange)}
+  .acct-bar-fill.over{background:var(--red)}
+  .acct-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .buybtn.topup{margin-top:0;font-size:13px;padding:9px 15px;font-weight:600}
+  .acct-warn{font-size:12px;font-family:'JetBrains Mono',monospace}
+  .acct-warn.warn{color:var(--orange)}.acct-warn.over{color:var(--red)}.acct-warn.ok{color:var(--text2)}
+  .acct-others{font-size:11.5px;color:var(--text2);font-family:'JetBrains Mono',monospace;margin-top:14px;padding-top:11px;border-top:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+  .acct-others .aolab{color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+  .acct-others .ao{background:var(--surface2);border:1px solid var(--border);padding:4px 9px;border-radius:20px;cursor:pointer;transition:border-color .15s,color .15s}
+  .acct-others .ao:hover{border-color:var(--text3);color:var(--text)}
+  .acct-others .ao.on{border-color:var(--accent);color:var(--accent);background:rgba(var(--accent-rgb),.10)}
 
   /* RESULTS GALLERY */
   .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--gallery-min,280px),1fr));gap:14px}
@@ -144,6 +168,34 @@
   .wrap{position:relative;z-index:1}
   .skinbtn{margin-left:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 9px;cursor:pointer;font:inherit;font-size:11px}
   .skinbtn:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* MODEL TABS (большие вкладки движков) */
+  .modeltabs{display:flex;gap:12px;margin-bottom:18px}
+  .mtab{flex:1;display:flex;align-items:center;gap:13px;padding:14px 18px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:border-color .15s,background .15s;text-align:left}
+  .mtab .mt-ic{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px;background:var(--surface3);color:var(--text2);flex-shrink:0}
+  .mtab .mt-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .mtab .mt-tt{font-size:16px;font-weight:700;letter-spacing:-.2px;color:var(--text)}
+  .mtab .mt-sub{font-size:11.5px;color:var(--text2);font-family:'JetBrains Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mtab .mt-key{margin-left:auto;font-size:10px;font-family:'JetBrains Mono',monospace;padding:3px 8px;border-radius:20px;flex-shrink:0}
+  .mtab .mt-key.ok{color:var(--green);background:rgba(68,204,102,.13)}
+  .mtab .mt-key.no{color:var(--orange);background:rgba(255,136,0,.13)}
+  .mtab:hover{border-color:var(--text3)}
+  .mtab.on{border-color:var(--accent);background:rgba(var(--accent-rgb),.10)}
+  .mtab.on .mt-ic{background:var(--accent);color:#fff}
+  html[data-skin="neural"] .mtab{position:relative;background:rgba(8,18,24,.55);text-transform:none}
+  html[data-skin="neural"] .mtab.on{background:rgba(0,229,255,.12);box-shadow:inset 0 0 0 1px rgba(0,229,255,.5),0 0 16px rgba(0,229,255,.14)}
+  html[data-skin="neural"] .mtab.on .mt-ic{background:rgba(0,229,255,.18);color:var(--accent);box-shadow:0 0 10px rgba(0,229,255,.4)}
+  html[data-skin="neural"] .mtab .mt-tt{text-transform:uppercase;letter-spacing:1px}
+  .omni-note{font-size:12.5px;color:var(--text2);margin-top:12px;padding:9px 12px;border-radius:var(--radius-sm);background:rgba(var(--accent-rgb),.06);border:1px solid rgba(var(--accent-rgb),.18)}
+  .vtag.model{color:var(--accent);background:rgba(var(--accent-rgb),.12)}
+  .vtag.sub{color:var(--text);background:var(--surface3)}
+  @media(max-width:680px){.modeltabs{flex-direction:column}}
+
+  /* fal submodel picker */
+  select.fal-select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:11px 12px;border-radius:var(--radius-sm);font:inherit;font-size:15px;font-weight:600;outline:none;cursor:pointer}
+  select.fal-select:focus{border-color:var(--accent)}
+  html[data-skin="neural"] select.fal-select{background:rgba(0,229,255,.05);text-transform:uppercase;letter-spacing:.5px;box-shadow:inset 0 0 10px rgba(0,0,0,.4)}
 
   /* ============ SKIN: NEURAL HUD (cyan HUD, по мотивам DamonIGS) ============ */
   html[data-skin="neural"]{
@@ -260,6 +312,23 @@
   .drawer .lab{font-size:14px;color:var(--text)}
   .bigval{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--accent)}
 
+  /* API keys section */
+  .keyrow{margin-bottom:16px}
+  .keyrow .kr-head{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);margin-bottom:7px}
+  .keyrow .kr-status{margin-left:auto;font-size:10px;font-family:'JetBrains Mono',monospace;padding:2px 8px;border-radius:20px}
+  .keyrow .kr-status.ok{color:var(--green);background:rgba(68,204,102,.13)}
+  .keyrow .kr-status.no{color:var(--orange);background:rgba(255,136,0,.13)}
+  .keyrow .kr-in{display:flex;gap:6px}
+  .keyrow .kr-in input{flex:1;font-size:12px}
+  .keyrow .kr-eye{flex:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);width:34px;cursor:pointer;color:var(--text2);font-size:14px}
+  .keyrow .kr-eye:hover{border-color:var(--accent);color:var(--accent)}
+  .keyrow .kr-save{flex:none;background:rgba(var(--accent-rgb),.16);color:var(--accent);border:1px solid rgba(var(--accent-rgb),.4);border-radius:var(--radius-sm);padding:0 13px;cursor:pointer;font:inherit;font-size:12px;font-weight:600}
+  .keyrow .kr-save:hover{background:rgba(var(--accent-rgb),.28)}
+  .keyrow .kr-msg{font-size:11px;margin-top:5px;min-height:13px;font-family:'JetBrains Mono',monospace;color:var(--text2)}
+  .keyrow .kr-msg.ok{color:var(--green)} .keyrow .kr-msg.err{color:var(--red)}
+  .keyrow .kr-link{font-size:11px;color:var(--text2)}
+  .keyrow .kr-link a{color:var(--accent);text-decoration:none}
+
   /* резиновость */
   @media(max-width:680px){
     .wrap{padding:14px 14px 60px}
@@ -277,13 +346,16 @@
     <h1>Seedance Generator</h1>
     <span class="badge" id="provBadge">…</span>
     <span class="spent">осталось <b id="remaining">$—</b> · потрачено <b id="spent">$0.00</b> · <span id="genCount">0</span> ген.</span>
-    <button class="skinbtn" id="apprBtn" title="Внешний вид и интерфейс">⚙ Вид</button>
+    <button class="skinbtn" id="apprBtn" title="Ключи API, внешний вид и интерфейс">⚙ Настройки</button>
   </div>
 
   <div class="drawer-overlay" id="apprOverlay"></div>
   <aside class="drawer" id="apprPanel">
-    <div class="drawer-head"><span class="drawer-title">⚙ Вид и интерфейс</span><button class="drawer-x" id="apprClose">✕</button></div>
+    <div class="drawer-head"><span class="drawer-title">⚙ Настройки</span><button class="drawer-x" id="apprClose">✕</button></div>
     <div class="drawer-body">
+      <div class="drawer-sec">🔑 Ключи API</div>
+      <div id="keysList"></div>
+
       <div class="drawer-sec">Оформление</div>
       <div class="field"><div class="flabel">Скин</div>
         <div class="seg" id="skinGroup">
@@ -304,54 +376,66 @@
         <input type="range" id="fontSize" min="80" max="150" step="5" value="100"></div>
       <div class="field"><div class="flabel">Размер карточек результатов <span class="val" id="cardVal">280px</span></div>
         <input type="range" id="cardSize" min="200" max="520" step="20" value="280"></div>
-
-      <div class="drawer-sec">Счёт BytePlus</div>
-      <div class="field"><div class="flabel">Пополнено, $ <span class="help" title="Сколько занёс на счёт BytePlus. Остаток = пополнено − потрачено.">?</span></div>
-        <input type="number" id="budget" placeholder="напр. 30.10" step="0.01"></div>
-      <div class="field"><div class="flabel">Остаток</div><div class="bigval" id="remaining2">$—</div>
-        <div class="prompt-hint" id="spent2"></div></div>
     </div>
   </aside>
 
+  <!-- MODEL TABS -->
+  <div class="modeltabs" id="modelTabs"></div>
+
+  <!-- ACCOUNT / EXPENSES (per-model) -->
+  <div class="card acct-card">
+    <div class="card-title">💳 Счёт · <span id="acctModel">…</span></div>
+    <div class="acct-grid">
+      <div class="acct-stat">
+        <div class="acct-k">Пополнено, $ <span class="help" title="Сколько ты занёс на счёт этого движка. Остаток = пополнено − потрачено.">?</span></div>
+        <input type="number" id="budget" placeholder="напр. 30.10" step="0.01" class="acct-budget">
+      </div>
+      <div class="acct-stat"><div class="acct-k">Потрачено</div><div class="acct-v" id="acctSpent">$0.00</div></div>
+      <div class="acct-stat"><div class="acct-k">Остаток</div><div class="acct-v big" id="acctRemaining">$—</div></div>
+      <div class="acct-stat"><div class="acct-k">Генераций</div><div class="acct-v" id="acctCount">0</div></div>
+    </div>
+    <div class="acct-bar"><div class="acct-bar-fill" id="acctBar"></div></div>
+    <div class="acct-foot">
+      <a class="buybtn topup" id="topupBtn" target="_blank" rel="noopener">💳 Пополнить кредиты</a>
+      <span class="acct-warn ok" id="acctWarn"></span>
+    </div>
+    <div class="acct-others" id="acctOthers"></div>
+  </div>
+
   <!-- SETTINGS (top) -->
   <div class="card">
-    <div class="card-title">Настройки</div>
+    <div class="card-title">Настройки · <span id="settingsModel">…</span></div>
     <div class="settings-grid">
       <div>
-        <div class="field"><div class="flabel">Mode</div><div class="seg" id="mode"></div></div>
-        <div class="field" style="margin-top:14px"><div class="flabel">Разрешение</div><div class="chips" id="resolution"></div></div>
+        <div class="field" id="fieldSubmodel" style="display:none"><div class="flabel">Модель fal</div><select id="submodel" class="fal-select"></select></div>
+        <div class="field" id="fieldModes"><div class="flabel">Mode</div><div class="seg" id="mode"></div></div>
+        <div class="field" id="fieldTasks" style="margin-top:14px;display:none"><div class="flabel">Режим <span class="help" id="taskHelp" title="">?</span></div><div class="seg" id="task"></div></div>
+        <div class="field" id="fieldResolution" style="margin-top:14px"><div class="flabel">Разрешение</div><div class="chips" id="resolution"></div></div>
         <div class="field" style="margin-top:14px"><div class="flabel">Длительность <span class="val" id="durVal">5 c</span></div>
           <input type="range" id="duration" min="4" max="15" step="1" value="5" /></div>
       </div>
       <div>
         <div class="field"><div class="flabel">Соотношение сторон</div><div class="chips ar-chips" id="aspectRatio"></div></div>
-        <div class="field" style="margin-top:14px"><div class="flabel">Опции</div>
-          <div class="switches">
-            <div class="switch-row"><div class="switch" id="sw-audio"></div><span class="lab">Нативный звук</span>
-              <span class="help" title="Модель сама сгенерирует звук/речь/музыку по сцене (generate_audio).">?</span></div>
-            <div class="switch-row"><div class="switch" id="sw-watermark"></div><span class="lab">Водяной знак</span>
-              <span class="help" title="Вкл — на видео будет вотермарк Dreamina. Выкл — чистое видео.">?</span></div>
-            <div class="switch-row"><div class="switch" id="sw-returnLastFrame"></div><span class="lab">Вернуть последний кадр</span>
-              <span class="help" title="Дополнительно вернёт последний кадр ролика отдельной картинкой — чтобы потом продолжить видео с него (бесшовное продолжение).">?</span></div>
-          </div>
-        </div>
-        <div class="field" style="margin-top:14px"><div class="flabel">Seed (опц.)</div><input type="number" id="seed" placeholder="случайный" /></div>
+        <div class="field" id="fieldSwitches" style="margin-top:14px"><div class="flabel">Опции</div>
+          <div class="switches" id="switches"></div></div>
+        <div class="field" id="fieldSeed" style="margin-top:14px"><div class="flabel">Seed (опц.)</div><input type="number" id="seed" placeholder="случайный" /></div>
       </div>
     </div>
+    <div class="omni-note" id="modelNote" style="display:none"></div>
   </div>
 
   <!-- REFERENCES -->
-  <div class="card">
+  <div class="card" id="refsCard">
     <div class="card-title">Референсы</div>
     <div class="refgroup" id="rgImg" data-kind="img">
       <div class="refhead"><span>🖼 Картинки <span class="reflim" id="limImg">0/9</span></span>
         <span class="refacts"><span class="dropicon" title="Перетащи файлы сюда"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 9.5 12 13l3.5-3.5"/><path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg></span><button class="refadd" id="addImg">+</button></span></div>
-      <div class="refspec">Ш×В 300–6000 px · ≤30 МБ · JPG·PNG·WEBP · можно файлом</div>
+      <div class="refspec" id="specImg">Ш×В 300–6000 px · ≤30 МБ · JPG·PNG·WEBP · можно файлом</div>
       <div class="thumbs" id="thImg"></div>
       <div class="refurl"><input type="text" id="urlImg" placeholder="…или публичный URL картинки" /><button class="urladd" data-k="img">＋ URL</button></div>
       <input type="file" id="inImg" accept="image/*" multiple hidden />
     </div>
-    <div class="ref-row">
+    <div class="ref-row" id="refRowAV">
       <div class="refgroup" id="rgVid" data-kind="vid">
         <div class="refhead"><span>🎬 Видео <span class="reflim warn" id="limVid">0/3</span></span>
           <span class="refacts"><span class="dropicon" title="Перетащи файлы сюда"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 9.5 12 13l3.5-3.5"/><path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg></span><button class="refadd" id="addVid">+</button></span></div>
@@ -375,7 +459,7 @@
   <!-- PROMPT -->
   <div class="card prompt-card">
     <div class="card-title">Промпт</div>
-    <textarea id="prompt" rows="3" placeholder="Опиши сцену. Для человека: «персонаж как на @Image1 …» — лицо/внешность зафиксируются по рефу на весь ролик. Камеру/движение копируй с @Video1, музыку — с @Audio1."></textarea>
+    <textarea id="prompt" rows="3" placeholder="Опиши сцену."></textarea>
     <div class="genbar">
       <div class="cost"><span class="tok" id="costTok">…</span><span class="usd" id="costUsd">$—</span></div>
       <button class="gen" id="gen">Сгенерировать</button>
@@ -383,8 +467,8 @@
     <div class="status" id="status"></div>
     <div class="pricewrap">
       <table class="price" id="priceTable"></table>
-      <div class="mut">$/1M токенов · «с видео» — если приложен видео-реф (дешевле), иначе «без». Списание — по факту из ответа API.</div>
-      <a class="buybtn" id="buyBtn" target="_blank" rel="noopener">💳 Купить токены (BytePlus)</a>
+      <div class="mut" id="priceNote"></div>
+      <a class="buybtn" id="buyBtn" target="_blank" rel="noopener">💳 Купить токены</a>
     </div>
   </div>
 

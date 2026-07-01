@@ -1,60 +1,321 @@
 {
-  "provider": "byteplus",
   "storageDir": "~/seedance/db",
-  "purchaseUrl": "https://console.byteplus.com/ark/region:ark+ap-southeast-1/openManagement?tab=ComputerVision",
-  "fps": 24,
-  "defaults": {
-    "mode": "pro",
-    "resolution": "720p",
-    "duration": 5,
-    "aspectRatio": "16:9",
-    "audio": false,
-    "watermark": false,
-    "returnLastFrame": false
-  },
-  "ui": {
-    "modes": [
-      { "id": "pro", "label": "Pro (2.0)" },
-      { "id": "fast", "label": "Fast" },
-      { "id": "mini", "label": "Mini (Exp)" }
-    ],
-    "resolutionsByMode": {
-      "pro": ["480p", "720p", "1080p", "4k"],
-      "fast": ["480p", "720p"],
-      "mini": ["480p", "720p"]
-    },
-    "shortSides": { "480p": 480, "720p": 720, "1080p": 1080, "4k": 2160 },
-    "durationMin": 4,
-    "durationMax": 15,
-    "aspectRatios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "adaptive"],
-    "refLimits": { "images": 9, "videos": 3, "audios": 3 }
-  },
-  "pricing": {
-    "note": "Юнит-цена USD за 1K токенов. v=есть видео-реф, nv=без видео-входа (списывается больше). токены ≈ (Ш×В×fps×длит)/1024.",
-    "unitPerK": {
-      "pro":  { "480p": {"v":0.0043,"nv":0.0070}, "720p":{"v":0.0043,"nv":0.0070}, "1080p":{"v":0.0047,"nv":0.0077}, "4k":{"v":0.0040,"nv":0.0040} },
-      "fast": { "480p": {"v":0.0033,"nv":0.0056}, "720p":{"v":0.0033,"nv":0.0056} },
-      "mini": { "480p": {"v":0.0021,"nv":0.0035}, "720p":{"v":0.0021,"nv":0.0035} }
-    },
-    "packs": {
-      "pro":  "Pro: $4.30/1M (10M $43, 100M $430), мин. 7 пакетов",
-      "fast": "Fast: $3.30/1M (10M $33, 100M $330), мин. 9 пакетов",
-      "mini": "Mini: 10M $21, 14M $29.4, 100M $210, мин. 2 пакета"
-    }
-  },
-  "providers": {
-    "byteplus": {
-      "label": "BytePlus ModelArk (Seedance 2.0)",
-      "baseUrl": "https://ark.ap-southeast.bytepluses.com/api/v3",
-      "createPath": "/contents/generations/tasks",
-      "statusPath": "/contents/generations/tasks/{id}",
-      "authScheme": "Bearer",
-      "models": {
-        "pro": "dreamina-seedance-2-0-260128",
-        "fast": "dreamina-seedance-2-0-fast-260128",
-        "mini": "dreamina-seedance-2-0-mini-260128"
+  "defaultModel": "seedance",
+  "models": [
+    {
+      "id": "seedance",
+      "label": "Seedance 2.0",
+      "badge": "BytePlus ModelArk",
+      "provider": "byteplus",
+      "apiKeyEnv": "SEEDANCE_API_KEY",
+      "purchaseUrl": "https://console.byteplus.com/ark/region:ark+ap-southeast-1/openManagement?tab=ComputerVision",
+      "buyLabel": "💳 Купить токены (BytePlus)",
+      "fps": 24,
+      "pricingModel": "tokens",
+      "defaults": {
+        "mode": "pro",
+        "resolution": "720p",
+        "duration": 5,
+        "aspectRatio": "16:9",
+        "audio": false,
+        "watermark": false,
+        "returnLastFrame": false
       },
-      "_note": "Pro подтверждён и активирован. fast/mini требуют своих resource-pack. mini model-id сверить в Model list. Видео/аудио-рефы Ark рекомендует слать публичным URL; base64 может не пройти."
+      "ui": {
+        "modes": [
+          { "id": "pro", "label": "Pro (2.0)" },
+          { "id": "fast", "label": "Fast" },
+          { "id": "mini", "label": "Mini (Exp)" }
+        ],
+        "resolutionsByMode": {
+          "pro": ["480p", "720p", "1080p", "4k"],
+          "fast": ["480p", "720p"],
+          "mini": ["480p", "720p"]
+        },
+        "shortSides": { "480p": 480, "720p": 720, "1080p": 1080, "4k": 2160 },
+        "durationMin": 4,
+        "durationMax": 15,
+        "durationStep": 1,
+        "aspectRatios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "adaptive"],
+        "refKinds": ["img", "vid", "aud"],
+        "refLimits": { "images": 9, "videos": 3, "audios": 3 },
+        "switches": [
+          { "id": "audio", "label": "Нативный звук", "help": "Модель сама сгенерирует звук/речь/музыку по сцене (generate_audio)." },
+          { "id": "watermark", "label": "Водяной знак", "help": "Вкл — на видео будет вотермарк Dreamina. Выкл — чистое видео." },
+          { "id": "returnLastFrame", "label": "Вернуть последний кадр", "help": "Дополнительно вернёт последний кадр ролика отдельной картинкой — чтобы потом продолжить видео с него." }
+        ],
+        "seed": true
+      },
+      "pricing": {
+        "note": "Юнит-цена USD за 1K токенов. v=есть видео-реф, nv=без видео-входа (списывается больше). токены ≈ (Ш×В×fps×длит)/1024.",
+        "unitPerK": {
+          "pro":  { "480p": {"v":0.0043,"nv":0.0070}, "720p":{"v":0.0043,"nv":0.0070}, "1080p":{"v":0.0047,"nv":0.0077}, "4k":{"v":0.0040,"nv":0.0040} },
+          "fast": { "480p": {"v":0.0033,"nv":0.0056}, "720p":{"v":0.0033,"nv":0.0056} },
+          "mini": { "480p": {"v":0.0021,"nv":0.0035}, "720p":{"v":0.0021,"nv":0.0035} }
+        },
+        "packs": {
+          "pro":  "Pro: $4.30/1M (10M $43, 100M $430), мин. 7 пакетов",
+          "fast": "Fast: $3.30/1M (10M $33, 100M $330), мин. 9 пакетов",
+          "mini": "Mini: 10M $21, 14M $29.4, 100M $210, мин. 2 пакета"
+        }
+      },
+      "connection": {
+        "baseUrl": "https://ark.ap-southeast.bytepluses.com/api/v3",
+        "createPath": "/contents/generations/tasks",
+        "statusPath": "/contents/generations/tasks/{id}",
+        "authScheme": "Bearer",
+        "models": {
+          "pro": "dreamina-seedance-2-0-260128",
+          "fast": "dreamina-seedance-2-0-fast-260128",
+          "mini": "dreamina-seedance-2-0-mini-260128"
+        },
+        "_note": "Pro подтверждён. fast/mini требуют своих resource-pack. Видео/аудио-рефы — публичным URL (TOS presigned), base64 может не пройти."
+      }
+    },
+    {
+      "id": "omni",
+      "label": "Google Omni",
+      "badge": "Gemini Omni Flash",
+      "provider": "google",
+      "apiKeyEnv": "GOOGLE_API_KEY",
+      "purchaseUrl": "https://aistudio.google.com/apikey",
+      "buyLabel": "🔑 Ключ / биллинг (Google AI Studio)",
+      "fps": 24,
+      "pricingModel": "perSecond",
+      "defaults": {
+        "duration": 8,
+        "aspectRatio": "16:9",
+        "task": "auto",
+        "seed": null
+      },
+      "ui": {
+        "modes": null,
+        "durationMin": 4,
+        "durationMax": 10,
+        "durationStep": 2,
+        "aspectRatios": ["16:9", "9:16"],
+        "refKinds": ["img"],
+        "refLimits": { "images": 7 },
+        "tasks": [
+          { "id": "auto", "label": "Авто", "help": "Режим по входу: нет картинок → текст→видео; 1 картинка → кадр→видео; несколько → референс→видео." },
+          { "id": "text_to_video", "label": "Текст→видео" },
+          { "id": "image_to_video", "label": "Кадр→видео" },
+          { "id": "reference_to_video", "label": "Референс→видео" }
+        ],
+        "switches": [],
+        "seed": true,
+        "note": "Omni: нативный звук всегда включён. Соотношения только 16:9 и 9:16, длительность до 10 c. Разрешение задаёт сама модель (в API не выбирается). Референсы — только картинки (1–7)."
+      },
+      "pricing": {
+        "note": "Оценка тарифа Gemini Omni Flash: база за клип + $/сек. Разрешение API не выбирает. Реальное списание — по факту из ответа API (usage), если оно есть.",
+        "perSecond": {
+          "base": 0.50,
+          "sec": 0.10
+        },
+        "packs": {}
+      },
+      "connection": {
+        "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+        "createPath": "/interactions",
+        "filePath": "/files/{id}",
+        "downloadPath": "/files/{id}:download?alt=media",
+        "authHeader": "x-goog-api-key",
+        "model": "gemini-omni-flash-preview",
+        "delivery": "uri",
+        "_note": "Direct Gemini API. Модель/эндпоинт совсем новые (анонс 30.06.2026) — если API-схема поменяется, правь здесь без изменений кода."
+      }
+    },
+    {
+      "id": "fal",
+      "label": "fal.ai",
+      "badge": "Агрегатор · pay-as-you-go",
+      "provider": "fal",
+      "apiKeyEnv": "FAL_API_KEY",
+      "purchaseUrl": "https://fal.ai/dashboard/billing",
+      "buyLabel": "💳 Пополнить баланс (fal.ai)",
+      "fps": 24,
+      "pricingModel": "perSecond",
+      "connection": {
+        "baseUrl": "https://queue.fal.run",
+        "authScheme": "Key",
+        "_note": "fal queue-API. POST /{endpoint} → response_url/status_url. Схемы моделей выверены по докам fal (2026-07)."
+      },
+      "defaults": { "submodel": "kling3pro", "duration": 5, "aspectRatio": "16:9", "resolution": "1080p", "seed": null },
+      "submodels": [
+        {
+          "id": "kling3pro",
+          "label": "Kling V3 Pro",
+          "endpoint": "fal-ai/kling-video/v3/pro/text-to-video",
+          "endpointI2V": "fal-ai/kling-video/v3/pro/image-to-video",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal pay-as-you-go, оценка ~$0.10/с.", "perSecond": { "base": 0, "sec": 0.10 }, "packs": {} },
+          "input": { "durationFormat": "plain", "aspect": true, "resolution": false, "audioField": "generate_audio", "negativeDefault": "blur, distort, and low quality", "cfgScale": 0.5, "imageField": "start_image_url", "seedField": false },
+          "ui": {
+            "durationMin": 3, "durationMax": 15, "durationStep": 1,
+            "aspectRatios": ["16:9", "9:16", "1:1"],
+            "refKinds": ["img"], "refLimits": { "images": 1 },
+            "switches": [ { "id": "audio", "label": "Нативный звук", "help": "Kling V3 генерит звук в один проход (generate_audio), англ./кит. речь.", "default": true } ],
+            "seed": false,
+            "note": "Kling V3 Pro — сейчас топ fal-лидерборда, звук в один проход, 3–15 c. 1 картинка → image-to-video (start_image_url)."
+          }
+        },
+        {
+          "id": "seedance2",
+          "label": "Seedance 2.0",
+          "endpoint": "bytedance/seedance-2.0/text-to-video",
+          "endpointI2V": "bytedance/seedance-2.0/image-to-video",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal, оценка ~$0.08/с.", "perSecond": { "base": 0, "sec": 0.08 }, "packs": {} },
+          "input": { "durationFormat": "plain", "aspect": true, "resolution": true, "audioField": null, "negativeDefault": null, "cfgScale": null, "imageField": "image_url", "seedField": true },
+          "ui": {
+            "durationMin": 3, "durationMax": 12, "durationStep": 1,
+            "resolutions": ["480p", "720p", "1080p"], "shortSides": { "480p": 480, "720p": 720, "1080p": 1080 },
+            "aspectRatios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+            "refKinds": ["img"], "refLimits": { "images": 1 },
+            "switches": [],
+            "seed": true,
+            "note": "Seedance 2.0 на fal — нативный звук всегда вкл, мультишот, физика, режиссёрская камера. 1 картинка → image-to-video."
+          }
+        },
+        {
+          "id": "veo31",
+          "label": "Google Veo 3.1",
+          "endpoint": "fal-ai/veo3.1",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal, оценка ~$0.40/с (зависит от разрешения и звука).", "perSecond": { "base": 0, "sec": 0.40 }, "packs": {} },
+          "input": { "durationFormat": "sec", "aspect": true, "resolution": true, "audioField": "generate_audio", "negativeDefault": null, "cfgScale": null, "imageField": null, "seedField": true },
+          "ui": {
+            "durationMin": 4, "durationMax": 8, "durationStep": 2,
+            "resolutions": ["720p", "1080p", "4k"], "shortSides": { "720p": 720, "1080p": 1080, "4k": 2160 },
+            "aspectRatios": ["16:9", "9:16"],
+            "refKinds": [], "refLimits": {},
+            "switches": [ { "id": "audio", "label": "Нативный звук", "help": "Veo 3.1 делает синхронный звук: речь с липсинком, эффекты, музыку (generate_audio).", "default": true } ],
+            "seed": true,
+            "note": "Google Veo 3.1 через fal — синхронный звук, до 4K. Платишь картой fal (альтернатива вкладке Omni, если у Google нет квоты)."
+          }
+        },
+        {
+          "id": "sora2pro",
+          "label": "Sora 2 Pro",
+          "endpoint": "fal-ai/sora-2/text-to-video/pro",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal: 720p ~$0.30/с, 1080p ~$0.50/с. Оценка усреднённая.", "perSecond": { "base": 0, "sec": 0.40 }, "packs": {} },
+          "input": { "durationFormat": "number", "aspect": true, "resolution": true, "audioField": null, "negativeDefault": null, "cfgScale": null, "imageField": null, "seedField": false },
+          "ui": {
+            "durationMin": 4, "durationMax": 20, "durationStep": 4,
+            "resolutions": ["720p", "1080p"], "shortSides": { "720p": 720, "1080p": 1080 },
+            "aspectRatios": ["16:9", "9:16"],
+            "refKinds": [], "refLimits": {},
+            "switches": [],
+            "seed": false,
+            "note": "Sora 2 Pro (OpenAI) — до 20 c, нативный звук, кинематографично. Дорогая: ~$0.30/с (720p) … $0.50/с (1080p)."
+          }
+        },
+        {
+          "id": "pixverse45",
+          "label": "PixVerse v4.5",
+          "endpoint": "fal-ai/pixverse/v4.5/text-to-video",
+          "endpointI2V": "fal-ai/pixverse/v4.5/image-to-video",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal, оценка ~$0.04/с (1080p только 5 c, 8 c дороже вдвое).", "perSecond": { "base": 0, "sec": 0.04 }, "packs": {} },
+          "input": { "durationFormat": "number", "aspect": true, "resolution": true, "audioField": null, "negativeDefault": null, "cfgScale": null, "imageField": "image_url", "seedField": true },
+          "ui": {
+            "durationMin": 5, "durationMax": 8, "durationStep": 3,
+            "resolutions": ["360p", "540p", "720p", "1080p"], "shortSides": { "360p": 360, "540p": 540, "720p": 720, "1080p": 1080 },
+            "aspectRatios": ["16:9", "4:3", "1:1", "3:4", "9:16"],
+            "refKinds": ["img"], "refLimits": { "images": 1 },
+            "switches": [],
+            "seed": true,
+            "note": "PixVerse v4.5 — стилизованное видео, дёшево. 1080p только 5 c. 1 картинка → image-to-video."
+          }
+        },
+        {
+          "id": "grok",
+          "label": "Grok Imagine (xAI)",
+          "endpoint": "xai/grok-imagine-video/text-to-video",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal, оценка ~$0.10/с.", "perSecond": { "base": 0, "sec": 0.10 }, "packs": {} },
+          "input": { "durationFormat": "number", "aspect": true, "resolution": true, "audioField": null, "negativeDefault": null, "cfgScale": null, "imageField": null, "seedField": false },
+          "ui": {
+            "durationMin": 6, "durationMax": 6, "durationStep": 1,
+            "resolutions": ["480p", "720p"], "shortSides": { "480p": 480, "720p": 720 },
+            "aspectRatios": ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"],
+            "refKinds": [], "refLimits": {},
+            "switches": [],
+            "seed": false,
+            "note": "Grok Imagine (xAI) — быстрый клип, длительность 6 c, 480p/720p."
+          }
+        },
+        {
+          "id": "kling3std",
+          "label": "Kling V3 Standard",
+          "endpoint": "fal-ai/kling-video/v3/standard/text-to-video",
+          "endpointI2V": "fal-ai/kling-video/v3/standard/image-to-video",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal, оценка ~$0.05/с — дешевле Pro.", "perSecond": { "base": 0, "sec": 0.05 }, "packs": {} },
+          "input": { "durationFormat": "plain", "aspect": true, "resolution": false, "audioField": "generate_audio", "negativeDefault": "blur, distort, and low quality", "cfgScale": 0.5, "imageField": "start_image_url", "seedField": false },
+          "ui": {
+            "durationMin": 3, "durationMax": 15, "durationStep": 1,
+            "aspectRatios": ["16:9", "9:16", "1:1"],
+            "refKinds": ["img"], "refLimits": { "images": 1 },
+            "switches": [ { "id": "audio", "label": "Нативный звук", "help": "Kling V3 генерит звук сам (generate_audio).", "default": true } ],
+            "seed": false,
+            "note": "Kling V3 Standard — дешевле Pro, тоже со звуком. 1 картинка → image-to-video."
+          }
+        },
+        {
+          "id": "veo31fast",
+          "label": "Veo 3.1 Fast",
+          "endpoint": "fal-ai/veo3.1/fast",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal, оценка ~$0.15/с — быстрый Veo.", "perSecond": { "base": 0, "sec": 0.15 }, "packs": {} },
+          "input": { "durationFormat": "sec", "aspect": true, "resolution": true, "audioField": "generate_audio", "negativeDefault": null, "cfgScale": null, "imageField": null, "seedField": true },
+          "ui": {
+            "durationMin": 4, "durationMax": 8, "durationStep": 2,
+            "resolutions": ["720p", "1080p"], "shortSides": { "720p": 720, "1080p": 1080 },
+            "aspectRatios": ["16:9", "9:16"],
+            "refKinds": [], "refLimits": {},
+            "switches": [ { "id": "audio", "label": "Нативный звук", "help": "Veo 3.1 Fast тоже со звуком (generate_audio).", "default": true } ],
+            "seed": true,
+            "note": "Veo 3.1 Fast — быстрее и дешевле обычного, со звуком."
+          }
+        },
+        {
+          "id": "seedance2fast",
+          "label": "Seedance 2.0 Fast",
+          "endpoint": "bytedance/seedance-2.0/fast/text-to-video",
+          "endpointI2V": "bytedance/seedance-2.0/fast/image-to-video",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal, оценка ~$0.04/с — дешёвый Seedance.", "perSecond": { "base": 0, "sec": 0.04 }, "packs": {} },
+          "input": { "durationFormat": "plain", "aspect": true, "resolution": true, "audioField": null, "negativeDefault": null, "cfgScale": null, "imageField": "image_url", "seedField": true },
+          "ui": {
+            "durationMin": 3, "durationMax": 12, "durationStep": 1,
+            "resolutions": ["480p", "720p", "1080p"], "shortSides": { "480p": 480, "720p": 720, "1080p": 1080 },
+            "aspectRatios": ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+            "refKinds": ["img"], "refLimits": { "images": 1 },
+            "switches": [],
+            "seed": true,
+            "note": "Seedance 2.0 Fast — дешевле и быстрее, звук нативный. 1 картинка → image-to-video."
+          }
+        },
+        {
+          "id": "wan25",
+          "label": "Wan 2.5",
+          "endpoint": "fal-ai/wan-25-preview/text-to-video",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal, оценка ~$0.05/с — из самых дешёвых.", "perSecond": { "base": 0, "sec": 0.05 }, "packs": {} },
+          "input": { "durationFormat": "plain", "aspect": true, "resolution": true, "audioField": null, "negativeDefault": null, "cfgScale": null, "imageField": null, "seedField": true },
+          "ui": {
+            "durationMin": 5, "durationMax": 10, "durationStep": 5,
+            "resolutions": ["480p", "720p", "1080p"], "shortSides": { "480p": 480, "720p": 720, "1080p": 1080 },
+            "aspectRatios": ["16:9", "9:16", "1:1"],
+            "refKinds": [], "refLimits": {},
+            "switches": [],
+            "seed": true,
+            "note": "Wan 2.5 — из самых дешёвых на fal, без звука."
+          }
+        }
+      ]
     }
-  }
+  ]
 }
