@@ -1,35 +1,26 @@
 #!/bin/bash
 set -e
-# Собирает «Seedance Generator.app» в /Applications: иконка + launcher, запускающий локальный сервер.
-PROJECT="/Users/dimonbogdanov/Downloads/seedance-generator"
-APP_NAME="Seedance Generator"
+# Собирает «Damon Videogen.app» в /Applications: WKWebView-обёртка, которая запускает
+# локальный node-сервер прямо из ЭТОЙ git-папки (scripts/main.swift → PROJECT) и показывает UI.
+# Иконку берём готовую (scripts/AppIcon.icns), чтобы сборка не зависела от Python/PIL.
+# Пересборка нужна ТОЛЬКО при смене имени/иконки/оболочки — правки кода подхватываются сами при запуске.
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PROJECT="$(cd "$HERE/.." && pwd)"
+APP_NAME="Damon Videogen"
+BUNDLE_ID="com.damon.videogen"
 APP="/Applications/${APP_NAME}.app"
-PY="$HOME/ComfyUI/venv/bin/python"
-BUILD="$PROJECT/build"
-rm -rf "$BUILD"; mkdir -p "$BUILD"
+ICNS="$HERE/AppIcon.icns"
+# версия — единый источник из package.json
+APP_VERSION="$(node -p "require('$PROJECT/package.json').version" 2>/dev/null || echo 1.0)"
 
-echo "1/4 master icon…"
-"$PY" "$PROJECT/scripts/make_icon.py" "$BUILD/icon_1024.png"
+[ -f "$ICNS" ] || { echo "нет иконки: $ICNS"; exit 1; }
+[ -f "$HERE/main.swift" ] || { echo "нет main.swift"; exit 1; }
 
-echo "2/4 iconset → icns…"
-ICONSET="$BUILD/AppIcon.iconset"; mkdir -p "$ICONSET"
-gen() { sips -z "$1" "$1" "$BUILD/icon_1024.png" --out "$ICONSET/$2" >/dev/null; }
-gen 16   icon_16x16.png
-gen 32   icon_16x16@2x.png
-gen 32   icon_32x32.png
-gen 64   icon_32x32@2x.png
-gen 128  icon_128x128.png
-gen 256  icon_128x128@2x.png
-gen 256  icon_256x256.png
-gen 512  icon_256x256@2x.png
-gen 512  icon_512x512.png
-cp "$BUILD/icon_1024.png" "$ICONSET/icon_512x512@2x.png"
-iconutil -c icns "$ICONSET" -o "$BUILD/AppIcon.icns"
-
-echo "3/4 bundle…"
+echo "1/3 bundle → $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BUILD/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+cp "$ICNS" "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -38,9 +29,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleName</key><string>${APP_NAME}</string>
   <key>CFBundleDisplayName</key><string>${APP_NAME}</string>
-  <key>CFBundleIdentifier</key><string>com.damon.seedancegenerator</string>
-  <key>CFBundleVersion</key><string>1.0</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
+  <key>CFBundleVersion</key><string>${APP_VERSION}</string>
+  <key>CFBundleShortVersionString</key><string>${APP_VERSION}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>launch</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
@@ -53,14 +44,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# нативная оболочка на Swift (WKWebView): сама стартует node-сервер и показывает UI в своём окне
-echo "    compiling native Swift shell…"
-swiftc -O "$PROJECT/scripts/main.swift" -o "$APP/Contents/MacOS/launch" \
+echo "2/3 compiling native Swift shell…"
+swiftc -O "$HERE/main.swift" -o "$APP/Contents/MacOS/launch" \
   -framework Cocoa -framework WebKit
 chmod +x "$APP/Contents/MacOS/launch"
 
-echo "4/4 register…"
+echo "3/3 register with LaunchServices…"
 touch "$APP"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" 2>/dev/null || true
 
-echo "DONE → $APP"
+echo "DONE → $APP  (сервер стартует из: $PROJECT)"

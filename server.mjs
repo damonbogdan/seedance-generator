@@ -10,6 +10,7 @@ import path from "node:path";
 import { buildClient } from "./seedanceClient.mjs";
 import { tosConfigured, uploadAndPresign } from "./tosUpload.mjs";
 import { uploadTemp } from "./tempUpload.mjs";
+import { checkModels } from "./scripts/check-models.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,6 +25,8 @@ function loadEnv() {
 loadEnv();
 
 const config = JSON.parse(readFileSync(path.join(__dirname, "config.json"), "utf8"));
+let APP_VERSION = "0.0.0";
+try { APP_VERSION = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")).version || APP_VERSION; } catch {}
 const PORT = Number(process.env.PORT || 5178);
 
 const STORAGE = config.storageDir.replace(/^~/, os.homedir());
@@ -103,7 +106,11 @@ function costOf(model, params, tokens) {
   if (pricingModel === "perSecond") {
     const pc = pricing.perSecond || {};
     const base = typeof pc.base === "number" ? pc.base : (pc.base?.[params.resolution] ?? Object.values(pc.base || {})[0] ?? 0);
-    return +(base + (pc.sec || 0) * Number(params.duration || 0)).toFixed(4);
+    // тариф за секунду: может зависеть от разрешения (byRes) и от звука ({on,off} или secAudio)
+    let sec = pc.byRes ? pc.byRes[params.resolution] : undefined;
+    if (sec == null) sec = (params.audio && pc.secAudio != null) ? pc.secAudio : (pc.sec || 0);
+    else if (typeof sec === "object") sec = params.audio ? (sec.on ?? 0) : (sec.off ?? 0);
+    return +(base + sec * Number(params.duration || 0)).toFixed(4);
   }
   // tokens (Seedance): считаем по факту usage из ответа API
   if (tokens == null) return null;
@@ -180,11 +187,18 @@ const server = http.createServer(async (req, res) => {
 
     if (p === "/api/config") {
       return send(res, 200, {
+        version: APP_VERSION,
         defaultModel: config.defaultModel,
         models: MODELS.map(publicModel),
         storageDir: STORAGE,
         tosEnabled: tosConfigured(),
       });
+    }
+
+    // сверка конфига с живыми схемами fal и Google: актуальны ли настройки и версии моделей
+    if (p === "/api/check-updates") {
+      const rep = await checkModels(config);
+      return send(res, 200, rep);
     }
 
     if (p === "/api/generate" && req.method === "POST") {

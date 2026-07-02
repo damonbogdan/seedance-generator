@@ -3,8 +3,16 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Seedance Generator</title>
+<title>Damon Videogen</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+// до отрисовки: выбрать скин (авто = по системной теме), чтобы светлая система не мигала тёмным
+(function () { try {
+  var p = localStorage.getItem("sd_skin") || "auto";
+  var s = p === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "neural") : p;
+  document.documentElement.setAttribute("data-skin", s);
+} catch (e) {} })();
+</script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   :root{
@@ -307,6 +315,22 @@
   html[data-skin="midnight"] body{background:#0a0a0a}
   html[data-skin="midnight"] .seg button.on,html[data-skin="midnight"] .chip.on{color:#fff}
 
+  /* ============ SKIN: LIGHT (белая — включается сама при светлой системной теме) ============ */
+  html[data-skin="light"]{
+    --bg:#f2f3f6;--surface:#ffffff;--surface2:#f4f5f8;--surface3:#e9ebf0;
+    --border:#dcdfe6;--text:#1b1e26;--text2:#5f6673;--text3:#a2a9b4;
+    --accent:#0a84ff;--accent-rgb:10,132,255;
+    --red:#d92f2f;--orange:#c96a00;--green:#1e9e4a;
+    color-scheme:light;
+  }
+  html[data-skin="light"] body{background:var(--bg)}
+  html[data-skin="light"] .card{box-shadow:0 1px 3px rgba(20,28,50,.07)}
+  html[data-skin="light"] .seg button.on{color:#fff}
+  html[data-skin="light"] .switch::after{box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  html[data-skin="light"] .swatch.active{border-color:var(--text)}
+  html[data-skin="light"] .drawer{box-shadow:-16px 0 44px rgba(20,28,50,.16)}
+  html[data-skin="light"] input[type=range]::-webkit-slider-thumb{border-color:#fff;box-shadow:0 1px 5px rgba(var(--accent-rgb),.5)}
+
   /* appearance DRAWER (боковая панель) */
   .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .25s;z-index:40}
   .drawer-overlay.open{opacity:1;pointer-events:auto}
@@ -359,15 +383,28 @@
     .topbar{flex-wrap:wrap}
     .topbar .spent{margin-left:0;width:100%;order:3}
   }
+  /* панель «Актуальность моделей» */
+  .upd-intro{font-size:13.5px;color:var(--text2);line-height:1.55;margin-bottom:12px}
+  .upd-run{margin:0 0 14px}
+  .upd-stamp{font-size:12.5px;color:var(--text2);margin:4px 0 12px}
+  .upd-item{padding:11px 13px;border:1px solid var(--border);border-radius:10px;margin-bottom:9px;background:var(--surface2)}
+  .upd-item .upd-name{font-weight:600;font-size:14.5px;display:flex;gap:8px;align-items:center}
+  .upd-item .upd-ep{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text2);margin-top:3px;word-break:break-all}
+  .upd-item ul{margin:7px 0 0 18px;font-size:13px;color:var(--text2);line-height:1.55}
+  .upd-item li.new{color:var(--accent)}
+  .upd-item a{color:var(--accent)}
+  .skinbtn.attn{border-color:var(--accent);color:var(--accent);box-shadow:0 0 9px color-mix(in srgb,var(--accent) 40%,transparent)}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="topbar">
     <div class="logo">▶</div>
-    <h1>Seedance Generator</h1>
+    <h1>Damon Videogen</h1>
+    <span class="badge" id="appVer" title="Версия приложения">v…</span>
     <span class="badge" id="provBadge">…</span>
     <span class="spent">осталось <b id="remaining">$—</b> · потрачено <b id="spent">$0.00</b> · <span id="genCount">0</span> ген.</span>
+    <button class="skinbtn" id="updBtn" title="Сверить настройки и версии всех моделей с живыми схемами API">🛰 Модели</button>
     <button class="skinbtn" id="apprBtn" title="Ключи API, внешний вид и интерфейс">⚙ Настройки</button>
   </div>
 
@@ -381,6 +418,8 @@
       <div class="drawer-sec">Оформление</div>
       <div class="field"><div class="flabel">Скин</div>
         <div class="seg" id="skinGroup">
+          <button data-skin="auto" title="Следовать системной теме: светлая → белый скин, тёмная → Neural">Авто</button>
+          <button data-skin="light">Белый</button>
           <button data-skin="glass">Glass</button>
           <button data-skin="neural">Neural</button>
           <button data-skin="midnight">Midnight</button>
@@ -398,6 +437,17 @@
         <input type="range" id="fontSize" min="80" max="150" step="5" value="100"></div>
       <div class="field"><div class="flabel">Размер карточек результатов <span class="val" id="cardVal">340px</span></div>
         <input type="range" id="cardSize" min="200" max="560" step="20" value="340"></div>
+    </div>
+  </aside>
+
+  <!-- ПРОВЕРКА АКТУАЛЬНОСТИ МОДЕЛЕЙ -->
+  <div class="drawer-overlay" id="updOverlay"></div>
+  <aside class="drawer" id="updPanel">
+    <div class="drawer-head"><span class="drawer-title">🛰 Актуальность моделей</span><button class="drawer-x" id="updClose">✕</button></div>
+    <div class="drawer-body">
+      <div class="upd-intro">Сверка config.json с живыми схемами API: fal (OpenAPI + каталог) и Google. Ловит смену диапазонов, пропавшие поля, депрекации и вышедшие новые версии.</div>
+      <button class="skinbtn upd-run" id="updRun">Проверить сейчас</button>
+      <div id="updResults"></div>
     </div>
   </aside>
 

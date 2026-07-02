@@ -2,7 +2,9 @@ import Cocoa
 import WebKit
 
 let PORT = 5178
-let PROJECT = "/Users/dimonbogdanov/Downloads/seedance-generator"
+// Единый первоисточник: приложение всегда запускает сервер из рабочей git-папки,
+// поэтому любая наша правка кода попадает в приложение при следующем запуске.
+let PROJECT = "/Users/dimonbogdanov/Claude/seedance-generator"
 let NODE = "/usr/local/bin/node"
 let APP_URL = "http://localhost:\(PORT)"
 
@@ -64,7 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDe
         window = NSWindow(contentRect: rect,
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = "Seedance Generator"
+        window.title = "Damon Videogen"
         window.center()
         window.setFrameAutosaveName("SeedanceMain")
         window.contentView = webView
@@ -140,10 +142,10 @@ func buildMenu() {
     mainMenu.addItem(appItem)
     let appMenu = NSMenu()
     appItem.submenu = appMenu
-    appMenu.addItem(withTitle: "About Seedance Generator", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+    appMenu.addItem(withTitle: "About Damon Videogen", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
     appMenu.addItem(NSMenuItem.separator())
     appMenu.addItem(withTitle: "Hide", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-    appMenu.addItem(withTitle: "Quit Seedance Generator", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    appMenu.addItem(withTitle: "Quit Damon Videogen", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
     let editItem = NSMenuItem()
     mainMenu.addItem(editItem)

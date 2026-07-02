@@ -173,14 +173,15 @@ function falClient({ apiKey, conn, model }) {
   const headers = { Authorization: `${conn.authScheme} ${apiKey}`, "Content-Type": "application/json" };
   const subById = (id) => (model.submodels || []).find((s) => s.id === id) || (model.submodels || [])[0];
 
-  function buildInput(sub, p) {
+  function buildInput(sub, p, isI2V) {
     const inp = { prompt: p.prompt };
     const dur = Number(p.duration);
     const f = sub.input || {};
     if (f.durationFormat === "sec") inp.duration = `${dur}s`;
     else if (f.durationFormat === "number") inp.duration = dur;
     else inp.duration = String(dur); // "plain" → "5"
-    if (f.aspect) inp.aspect_ratio = p.aspectRatio;
+    // у части i2v-эндпоинтов (Kling, Grok, PixVerse, Wan) формат кадра задаёт картинка — aspect_ratio в схеме нет
+    if (f.aspect && !(isI2V && f.aspectI2V === false)) inp.aspect_ratio = p.aspectRatio;
     if (f.resolution && p.resolution) inp.resolution = p.resolution;
     if (f.audioField) inp[f.audioField] = !!p.audio;
     // негатив: текст пользователя приоритетнее дефолта; пустая строка = пользователь явно убрал негатив
@@ -203,9 +204,10 @@ function falClient({ apiKey, conn, model }) {
     async submit(params) {
       const sub = subById(params.submodel);
       const img = firstImageRef(params.images);
-      const endpoint = (sub.endpointI2V && img) ? sub.endpointI2V : sub.endpoint;
+      const isI2V = !!(sub.endpointI2V && img);
+      const endpoint = isI2V ? sub.endpointI2V : sub.endpoint;
       const body = await httpJson(`${conn.baseUrl}/${endpoint}`, {
-        method: "POST", headers, body: JSON.stringify(buildInput(sub, params)),
+        method: "POST", headers, body: JSON.stringify(buildInput(sub, params, isI2V)),
       });
       const responseUrl = body.response_url || (body.request_id ? `${conn.baseUrl}/${endpoint}/requests/${body.request_id}` : null);
       if (!responseUrl) { const e = new Error("fal не вернул request_id/response_url."); e.body = body; throw e; }

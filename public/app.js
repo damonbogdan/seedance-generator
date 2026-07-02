@@ -19,6 +19,7 @@ const subKey = (m) => (m && m._sub ? m._sub.id : active); // ключ пер-п�
 
 async function init() {
   CFG = await (await fetch("/api/config")).json();
+  if ($("appVer")) $("appVer").textContent = "v" + (CFG.version || "?");
   ORDER = CFG.models.map((m) => m.id);
   for (const m of CFG.models) MODELS[m.id] = m;
   active = MODELS[CFG.defaultModel] ? CFG.defaultModel : ORDER[0];
@@ -52,6 +53,7 @@ async function init() {
 
   renderModel();
   setupRefs(); bindGen(); setupAppearance(); setupPrompt();
+  autoUpdateCheck();
 }
 
 // ── вкладки движков ─────────────────────────────────────────
@@ -248,8 +250,24 @@ function buildResolutions() {
   }
 }
 
-// оценка цены конкретного разрешения при текущих длительности/формате (токенные модели)
+// тариф $/с для perSecond-моделей: может зависеть от разрешения (byRes) и звука ({on,off}/secAudio)
+function perSecRate(pc, resolution, audio) {
+  let sec = pc.byRes ? pc.byRes[resolution] : undefined;
+  if (sec == null) sec = (audio && pc.secAudio != null) ? pc.secAudio : (pc.sec || 0);
+  else if (typeof sec === "object") sec = audio ? (sec.on ?? 0) : (sec.off ?? 0);
+  return sec;
+}
+function audioOn(m, s) {
+  return !!(m.ui.audioNative || (m.ui.switches || []).some((x) => x.id === "audio" && s.sw[x.id]));
+}
+
+// оценка цены конкретного разрешения при текущих длительности/звуке
 function resPriceHint(m, s, r) {
+  if (m.pricingModel === "perSecond") {
+    const pc = m.pricing.perSecond || {};
+    if (!pc.byRes || pc.byRes[r] == null) return "";
+    return "≈$" + (perSecRate(pc, r, audioOn(m, s)) * Number(s.duration)).toFixed(2);
+  }
   if (m.pricingModel !== "tokens" || !m.ui.shortSides) return "";
   const short = m.ui.shortSides[r]; if (!short) return "";
   let factor = 16 / 9;
@@ -303,7 +321,20 @@ function renderPriceTable() {
   if (m.pricingModel === "perSecond") {
     const pc = m.pricing.perSecond;
     let html;
-    if (typeof pc.base === "number") {
+    if (pc.byRes) {
+      const hasAudioCols = Object.values(pc.byRes).some((v) => typeof v === "object");
+      html = hasAudioCols
+        ? "<tr><th>Разрешение</th><th>без звука</th><th>со звуком</th></tr>"
+        : "<tr><th>Разрешение</th><th>за секунду</th></tr>";
+      for (const [res, v] of Object.entries(pc.byRes)) {
+        if (typeof v === "object") html += `<tr><td>${res}</td><td>$${(v.off ?? 0).toFixed(3)}/с</td><td>$${(v.on ?? 0).toFixed(3)}/с</td></tr>`;
+        else html += hasAudioCols ? `<tr><td>${res}</td><td colspan="2">$${v.toFixed(3)}/с</td></tr>` : `<tr><td>${res}</td><td>$${v.toFixed(3)}/с</td></tr>`;
+      }
+    } else if (pc.secAudio != null) {
+      html = "<tr><th>Тариф</th><th>за секунду</th></tr>" +
+        `<tr><td>Без звука</td><td>$${pc.sec.toFixed(3)}/с</td></tr>` +
+        `<tr><td>Со звуком</td><td>$${pc.secAudio.toFixed(3)}/с</td></tr>`;
+    } else if (typeof pc.base === "number") {
       html = "<tr><th>Тариф (оценка)</th><th>значение</th></tr>" +
         (pc.base > 0 ? `<tr><td>База за клип</td><td>$${pc.base.toFixed(2)}</td></tr>` : "") +
         `<tr><td>За секунду</td><td>$${pc.sec.toFixed(2)}/с</td></tr>`;
@@ -312,7 +343,7 @@ function renderPriceTable() {
       for (const [res, base] of Object.entries(pc.base)) html += `<tr><td>${res}</td><td>$${base.toFixed(2)}</td><td>$${pc.sec.toFixed(2)}/с</td></tr>`;
     }
     $("priceTable").innerHTML = html;
-    $("priceNote").textContent = "Оценка: платишь по факту за секунды генерации. Реальное списание — по тарифу провайдера.";
+    $("priceNote").textContent = (m.pricing.note ? m.pricing.note + " " : "") + "Платишь по факту за секунды генерации, списание — по тарифу провайдера.";
   } else {
     const t = m.pricing.unitPerK[S().mode] || Object.values(m.pricing.unitPerK)[0];
     let html = "<tr><th>Разрешение</th><th>с видео</th><th>без видео</th></tr>";
@@ -328,10 +359,11 @@ function estimate() {
   if (m.pricingModel === "perSecond") {
     const pc = m.pricing.perSecond;
     const base = typeof pc.base === "number" ? pc.base : (pc.base[s.resolution] ?? Object.values(pc.base)[0] ?? 0);
-    const cost = base + (pc.sec || 0) * Number(s.duration);
+    const sec = perSecRate(pc, s.resolution, audioOn(m, s));
+    const cost = base + sec * Number(s.duration);
     const label = base > 0
-      ? `база $${base.toFixed(2)} + $${(pc.sec || 0).toFixed(2)}/с × ${s.duration}с`
-      : `$${(pc.sec || 0).toFixed(2)}/с × ${s.duration}с`;
+      ? `база $${base.toFixed(2)} + $${sec.toFixed(2)}/с × ${s.duration}с`
+      : `$${sec.toFixed(2)}/с × ${s.duration}с`;
     return { model: "perSecond", cost, label };
   }
   const short = m.ui.shortSides[s.resolution] || 720;
@@ -623,9 +655,11 @@ const ACCENTS = [
 const SK = "sd_skin", AK = "sd_accent", FK = "sd_fx", FS = "sd_fs";
 function getFx() { try { return JSON.parse(localStorage.getItem(FK)) || { scanlines: true, grid: true, glow: true }; } catch { return { scanlines: true, grid: true, glow: true }; } }
 function applyAppearance() {
-  const skin = localStorage.getItem(SK) || "neural";
+  // «auto» (по умолчанию) следует за системной темой: светлая → белый скин, тёмная → Neural
+  const pref = localStorage.getItem(SK) || "auto";
+  const skin = pref === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "neural") : pref;
   document.documentElement.setAttribute("data-skin", skin);
-  document.querySelectorAll("#skinGroup button").forEach((b) => b.classList.toggle("on", b.dataset.skin === skin));
+  document.querySelectorAll("#skinGroup button").forEach((b) => b.classList.toggle("on", b.dataset.skin === pref));
   $("hudFxField").style.display = skin === "neural" ? "" : "none";
   const root = document.documentElement;
   let acc = null; try { acc = JSON.parse(localStorage.getItem(AK)); } catch {}
@@ -655,6 +689,10 @@ function setupAppearance() {
     sw.appendChild(s);
   }
   $("skinGroup").querySelectorAll("button").forEach((b) => b.onclick = () => { localStorage.setItem(SK, b.dataset.skin); applyAppearance(); });
+  // в режиме «Авто» перекрашиваемся сразу при смене системной темы
+  matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyAppearance);
+  // страховка для WebView: если смена темы случилась, пока окно было в фоне
+  window.addEventListener("focus", applyAppearance);
   document.querySelectorAll(".switch[data-fx]").forEach((el) => el.onclick = () => { const fx = getFx(); const k = el.dataset.fx; fx[k] = !fx[k]; localStorage.setItem(FK, JSON.stringify(fx)); applyAppearance(); });
   $("fontSize").oninput = () => { localStorage.setItem(FS, $("fontSize").value); applyAppearance(); };
   $("cardSize").oninput = () => { localStorage.setItem("sd_card", $("cardSize").value); applyAppearance(); };
@@ -662,8 +700,66 @@ function setupAppearance() {
   $("apprBtn").onclick = () => drawer(!$("apprPanel").classList.contains("open"));
   $("apprClose").onclick = () => drawer(false);
   $("apprOverlay").onclick = () => drawer(false);
+  const updDrawer = (o) => { $("updPanel").classList.toggle("open", o); $("updOverlay").classList.toggle("open", o); };
+  $("updBtn").onclick = () => { updDrawer(true); if (UPD_CACHE) renderUpdateReport(UPD_CACHE); else runUpdateCheck(); };
+  $("updClose").onclick = () => updDrawer(false);
+  $("updOverlay").onclick = () => updDrawer(false);
+  $("updRun").onclick = () => runUpdateCheck();
   $("budget").onchange = async () => { await fetch("/api/budget", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: active, budget: Number($("budget").value) || 0 }) }); loadGallery(); };
   applyAppearance();
+}
+
+// ── актуальность моделей: сверка config.json с живыми схемами API ──
+let UPD_CACHE = null;
+const UPD_ICON = { ok: "✅", warn: "⚠️", update: "🆕", outdated: "⛔", error: "⛔", skip: "➖", manual: "✋" };
+function updHasNews(rep) {
+  return (rep.fal || []).some((x) => x.status !== "ok") || (rep.omni && !["ok", "skip"].includes(rep.omni.status));
+}
+function markUpdBtn(rep) { $("updBtn").classList.toggle("attn", updHasNews(rep)); }
+async function runUpdateCheck() {
+  const box = $("updResults");
+  box.innerHTML = '<div class="upd-stamp"><span class="spin"></span> Опрашиваю fal и Google — секунд десять…</div>';
+  try {
+    const r = await fetch("/api/check-updates");
+    const rep = await r.json();
+    if (!r.ok) throw new Error(rep.error || "ошибка сервера");
+    UPD_CACHE = rep;
+    localStorage.setItem("updCheckAt", String(Date.now()));
+    renderUpdateReport(rep); markUpdBtn(rep);
+  } catch (e) { box.innerHTML = `<div class="upd-stamp">Ошибка проверки: ${escapeHtml(e.message)}</div>`; }
+}
+function renderUpdateReport(rep) {
+  let html = `<div class="upd-stamp">Проверено: ${new Date(rep.checkedAt).toLocaleString("ru")}</div>`;
+  for (const e of rep.fal || []) {
+    html += `<div class="upd-item"><div class="upd-name">${UPD_ICON[e.status] || "·"} ${escapeHtml(e.label)}</div>` +
+      `<div class="upd-ep">${escapeHtml(e.endpoint)}</div>`;
+    const li = [
+      ...(e.issues || []).map((i) => `<li>${escapeHtml(i)}</li>`),
+      ...(e.newer || []).map((n) => `<li class="new">вышла новее: ${escapeHtml(n)}</li>`),
+    ];
+    if (li.length) html += `<ul>${li.join("")}</ul>`;
+    html += `</div>`;
+  }
+  if (rep.omni) {
+    html += `<div class="upd-item"><div class="upd-name">${UPD_ICON[rep.omni.status] || "·"} Google Omni</div>` +
+      (rep.omni.model ? `<div class="upd-ep">${escapeHtml(rep.omni.model)}</div>` : "") +
+      `<ul><li>${escapeHtml(rep.omni.note || "")}</li>${(rep.omni.candidates || []).map((c) => `<li>доступна также: ${escapeHtml(c)}</li>`).join("")}</ul></div>`;
+  }
+  if (rep.byteplus) {
+    html += `<div class="upd-item"><div class="upd-name">✋ Seedance (BytePlus)</div>` +
+      `<ul><li>${escapeHtml(rep.byteplus.note)}</li><li><a href="${rep.byteplus.url}" target="_blank" rel="noopener">Открыть консоль BytePlus</a></li></ul></div>`;
+  }
+  $("updResults").innerHTML = html;
+}
+// раз в сутки — тихая фоновая сверка; при находках подсвечиваем кнопку «Модели»
+function autoUpdateCheck() {
+  if (Date.now() - Number(localStorage.getItem("updCheckAt") || 0) < 864e5) return;
+  fetch("/api/check-updates").then((r) => r.json()).then((rep) => {
+    if (!rep || !rep.fal) return;
+    UPD_CACHE = rep;
+    localStorage.setItem("updCheckAt", String(Date.now()));
+    markUpdBtn(rep);
+  }).catch(() => {});
 }
 
 // промпт: авто-высота под текст + запоминаем ручное растягивание, пишем в состояние вкладки
