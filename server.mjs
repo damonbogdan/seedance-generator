@@ -205,7 +205,11 @@ const server = http.createServer(async (req, res) => {
       const params = {
         mode: b.mode || null, submodel: b.submodel || null, resolution: b.resolution, duration: Number(b.duration),
         aspectRatio: b.aspectRatio, audio: !!b.audio, watermark: !!b.watermark,
-        returnLastFrame: !!b.returnLastFrame, task: b.task || null, seed: b.seed || null, hasVideoInput,
+        returnLastFrame: !!b.returnLastFrame, task: b.task || null, seed: b.seed || null,
+        // пустая строка ≠ null: "" = пользователь явно очистил негатив, null = поле не поддерживается
+        negativePrompt: b.negativePrompt != null ? String(b.negativePrompt) : null,
+        cfgScale: b.cfgScale != null ? Number(b.cfgScale) : null,
+        hasVideoInput,
       };
 
       // Seedance: видео/аудио через TOS presigned URL; картинки base64. Omni: только картинки.
@@ -334,7 +338,25 @@ const server = http.createServer(async (req, res) => {
       if (!full.startsWith(STORAGE)) return send(res, 403, { error: "forbidden" });
       try {
         const data = await readFile(full);
-        return send(res, 200, data, MIME[path.extname(full)] || "application/octet-stream");
+        const type = MIME[path.extname(full)] || "application/octet-stream";
+        // Range обязателен для <video>: Safari без 206 вообще не играет ролики
+        const range = req.headers.range && req.headers.range.match(/bytes=(\d*)-(\d*)/);
+        if (range && (range[1] || range[2])) {
+          const start = range[1] ? parseInt(range[1], 10) : Math.max(0, data.length - parseInt(range[2], 10));
+          let end = range[1] && range[2] ? parseInt(range[2], 10) : data.length - 1;
+          end = Math.min(end, data.length - 1);
+          if (isNaN(start) || start > end || start >= data.length) {
+            res.writeHead(416, { "Content-Range": `bytes */${data.length}` });
+            return res.end();
+          }
+          res.writeHead(206, {
+            "Content-Type": type, "Cache-Control": "no-store", "Accept-Ranges": "bytes",
+            "Content-Range": `bytes ${start}-${end}/${data.length}`, "Content-Length": end - start + 1,
+          });
+          return res.end(data.subarray(start, end + 1));
+        }
+        res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store", "Accept-Ranges": "bytes", "Content-Length": data.length });
+        return res.end(data);
       } catch { return send(res, 404, { error: "not found" }); }
     }
 

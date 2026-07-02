@@ -183,11 +183,19 @@ function falClient({ apiKey, conn, model }) {
     if (f.aspect) inp.aspect_ratio = p.aspectRatio;
     if (f.resolution && p.resolution) inp.resolution = p.resolution;
     if (f.audioField) inp[f.audioField] = !!p.audio;
-    if (f.negativeDefault) inp.negative_prompt = f.negativeDefault;
-    if (f.cfgScale != null) inp.cfg_scale = f.cfgScale;
+    // негатив: текст пользователя приоритетнее дефолта; пустая строка = пользователь явно убрал негатив
+    if (p.negativePrompt != null && (f.negativeField || f.negativeDefault)) {
+      const t = String(p.negativePrompt).trim();
+      if (t) inp.negative_prompt = t;
+      else if (f.negativeDefault) inp.negative_prompt = ""; // явно перебиваем дефолт модели пустым
+    } else if (f.negativeDefault) inp.negative_prompt = f.negativeDefault;
+    const cfg = (p.cfgScale != null && p.cfgScale !== "") ? Number(p.cfgScale) : f.cfgScale;
+    if (cfg != null && isFinite(cfg)) inp.cfg_scale = cfg;
     if (f.seedField && p.seed !== undefined && p.seed !== null && p.seed !== "") inp.seed = Number(p.seed);
     const img = firstImageRef(p.images);
     if (f.imageField && img) inp[f.imageField] = img;
+    const img2 = (p.images || [])[1];
+    if (f.endImageField && img2) inp[f.endImageField] = img2; // Kling: 2-я картинка = финальный кадр
     return inp;
   }
 
