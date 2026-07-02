@@ -10,6 +10,7 @@ import path from "node:path";
 import { buildClient } from "./seedanceClient.mjs";
 import { tosConfigured, uploadAndPresign } from "./tosUpload.mjs";
 import { uploadTemp } from "./tempUpload.mjs";
+import { checkModels } from "./scripts/check-models.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,6 +25,8 @@ function loadEnv() {
 loadEnv();
 
 const config = JSON.parse(readFileSync(path.join(__dirname, "config.json"), "utf8"));
+let APP_VERSION = "0.0.0";
+try { APP_VERSION = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")).version || APP_VERSION; } catch {}
 const PORT = Number(process.env.PORT || 5178);
 
 const STORAGE = config.storageDir.replace(/^~/, os.homedir());
@@ -103,7 +106,11 @@ function costOf(model, params, tokens) {
   if (pricingModel === "perSecond") {
     const pc = pricing.perSecond || {};
     const base = typeof pc.base === "number" ? pc.base : (pc.base?.[params.resolution] ?? Object.values(pc.base || {})[0] ?? 0);
-    return +(base + (pc.sec || 0) * Number(params.duration || 0)).toFixed(4);
+    // тариф за секунду: может зависеть от разрешения (byRes) и от звука ({on,off} или secAudio)
+    let sec = pc.byRes ? pc.byRes[params.resolution] : undefined;
+    if (sec == null) sec = (params.audio && pc.secAudio != null) ? pc.secAudio : (pc.sec || 0);
+    else if (typeof sec === "object") sec = params.audio ? (sec.on ?? 0) : (sec.off ?? 0);
+    return +(base + sec * Number(params.duration || 0)).toFixed(4);
   }
   // tokens (Seedance): считаем по факту usage из ответа API
   if (tokens == null) return null;
@@ -180,11 +187,18 @@ const server = http.createServer(async (req, res) => {
 
     if (p === "/api/config") {
       return send(res, 200, {
+        version: APP_VERSION,
         defaultModel: config.defaultModel,
         models: MODELS.map(publicModel),
         storageDir: STORAGE,
         tosEnabled: tosConfigured(),
       });
+    }
+
+    // сверка конфига с живыми схемами fal и Google: актуальны ли настройки и версии моделей
+    if (p === "/api/check-updates") {
+      const rep = await checkModels(config);
+      return send(res, 200, rep);
     }
 
     if (p === "/api/generate" && req.method === "POST") {
@@ -205,7 +219,11 @@ const server = http.createServer(async (req, res) => {
       const params = {
         mode: b.mode || null, submodel: b.submodel || null, resolution: b.resolution, duration: Number(b.duration),
         aspectRatio: b.aspectRatio, audio: !!b.audio, watermark: !!b.watermark,
-        returnLastFrame: !!b.returnLastFrame, task: b.task || null, seed: b.seed || null, hasVideoInput,
+        returnLastFrame: !!b.returnLastFrame, task: b.task || null, seed: b.seed || null,
+        // пустая строка ≠ null: "" = пользователь явно очистил негатив, null = поле не поддерживается
+        negativePrompt: b.negativePrompt != null ? String(b.negativePrompt) : null,
+        cfgScale: b.cfgScale != null ? Number(b.cfgScale) : null,
+        hasVideoInput,
       };
 
       // Seedance: видео/аудио через TOS presigned URL; картинки base64. Omni: только картинки.
@@ -334,7 +352,25 @@ const server = http.createServer(async (req, res) => {
       if (!full.startsWith(STORAGE)) return send(res, 403, { error: "forbidden" });
       try {
         const data = await readFile(full);
-        return send(res, 200, data, MIME[path.extname(full)] || "application/octet-stream");
+        const type = MIME[path.extname(full)] || "application/octet-stream";
+        // Range обязателен для <video>: Safari без 206 вообще не играет ролики
+        const range = req.headers.range && req.headers.range.match(/bytes=(\d*)-(\d*)/);
+        if (range && (range[1] || range[2])) {
+          const start = range[1] ? parseInt(range[1], 10) : Math.max(0, data.length - parseInt(range[2], 10));
+          let end = range[1] && range[2] ? parseInt(range[2], 10) : data.length - 1;
+          end = Math.min(end, data.length - 1);
+          if (isNaN(start) || start > end || start >= data.length) {
+            res.writeHead(416, { "Content-Range": `bytes */${data.length}` });
+            return res.end();
+          }
+          res.writeHead(206, {
+            "Content-Type": type, "Cache-Control": "no-store", "Accept-Ranges": "bytes",
+            "Content-Range": `bytes ${start}-${end}/${data.length}`, "Content-Length": end - start + 1,
+          });
+          return res.end(data.subarray(start, end + 1));
+        }
+        res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store", "Accept-Ranges": "bytes", "Content-Length": data.length });
+        return res.end(data);
       } catch { return send(res, 404, { error: "not found" }); }
     }
 

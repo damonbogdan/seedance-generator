@@ -4,7 +4,7 @@ const MODELS = {};        // id -> модель (публичный вид с с
 let ORDER = [];           // порядок вкладок
 let active = null;        // id активной модели
 const state = {};         // id -> состояние вкладки (настройки, рефы, промпт)
-const RES_META = { "480p": { tag: "SD", scale: .45 }, "720p": { tag: "HD", scale: .62 }, "1080p": { tag: "FHD", scale: .82 }, "4k": { tag: "4K", scale: 1 } };
+const RES_META = { "360p": { tag: "LQ", scale: .3 }, "480p": { tag: "SD", scale: .45 }, "540p": { tag: "qHD", scale: .52 }, "720p": { tag: "HD", scale: .62 }, "1080p": { tag: "FHD", scale: .82 }, "4k": { tag: "4K", scale: 1 } };
 
 const S = () => state[active];   // состояние активной вкладки
 // эффективная модель: для fal подмешиваем выбранную подмодель (её ui/pricing/цену)
@@ -15,9 +15,11 @@ function M() {
   return { ...base, ui: sub.ui, pricing: sub.pricing, pricingModel: sub.pricingModel || base.pricingModel, fps: sub.fps || base.fps, badge: sub.label, _sub: sub };
 }
 const baseModel = () => MODELS[active]; // «сырая» модель (с submodels)
+const subKey = (m) => (m && m._sub ? m._sub.id : active); // ключ пер-подмодельных настроек (негатив, CFG)
 
 async function init() {
   CFG = await (await fetch("/api/config")).json();
+  if ($("appVer")) $("appVer").textContent = "v" + (CFG.version || "?");
   ORDER = CFG.models.map((m) => m.id);
   for (const m of CFG.models) MODELS[m.id] = m;
   active = MODELS[CFG.defaultModel] ? CFG.defaultModel : ORDER[0];
@@ -41,9 +43,17 @@ async function init() {
   // слушатели, общие для всех вкладок (DOM переиспользуется)
   $("duration").addEventListener("input", () => { S().duration = Number($("duration").value); $("durVal").textContent = $("duration").value + " c"; updateCost(); });
   $("seed").addEventListener("input", () => { S().seed = $("seed").value; });
+  $("cfg").addEventListener("input", () => {
+    const v = Number($("cfg").value); $("cfgVal").textContent = v.toFixed(2);
+    S().cfgs = S().cfgs || {}; S().cfgs[subKey(M())] = v;
+  });
+  $("negative").addEventListener("input", () => {
+    S().negs = S().negs || {}; S().negs[subKey(M())] = $("negative").value;
+  });
 
   renderModel();
   setupRefs(); bindGen(); setupAppearance(); setupPrompt();
+  autoUpdateCheck();
 }
 
 // ── вкладки движков ─────────────────────────────────────────
@@ -114,17 +124,39 @@ function renderModel() {
 
   buildSubmodels(); buildModes(); buildTasks(); buildResolutions(); buildAspects(); buildSwitches();
 
-  // длительность (подгоняем под диапазон/шаг активной (под)модели)
+  // длительность (подгоняем под диапазон/шаг активной (под)модели; разрешение может резать максимум — PixVerse 1080p ≤ 5 c)
   const du = $("duration");
-  du.min = m.ui.durationMin; du.max = m.ui.durationMax; du.step = m.ui.durationStep || 1;
+  const durCap = m.ui.resolutionMaxDur ? m.ui.resolutionMaxDur[S().resolution] : null;
+  du.min = m.ui.durationMin; du.max = durCap ? Math.min(m.ui.durationMax, durCap) : m.ui.durationMax; du.step = m.ui.durationStep || 1;
   const step = Number(du.step) || 1, mn = Number(du.min), mx = Number(du.max);
   let dv = Number(S().duration); if (!isFinite(dv)) dv = mn;
   dv = Math.min(mx, Math.max(mn, Math.round((dv - mn) / step) * step + mn));
   S().duration = dv; du.value = dv; $("durVal").textContent = dv + " c";
+  $("durMinLab").textContent = mn + " c"; $("durMaxLab").textContent = mx + " c";
 
   // seed
   $("fieldSeed").style.display = m.ui.seed ? "" : "none";
   $("seed").value = S().seed || "";
+
+  // негатив-промпт (модели с negative_prompt)
+  const negOn = !!m.ui.negative;
+  $("fieldNegative").style.display = negOn ? "" : "none";
+  if (negOn) {
+    const k = subKey(m);
+    $("negative").value = (S().negs && S().negs[k] != null) ? S().negs[k] : (m.ui.negativeDefault || "");
+  }
+
+  // CFG-слайдер (модели с cfg_scale)
+  const cfgOn = !!m.ui.cfg;
+  $("fieldCfg").style.display = cfgOn ? "" : "none";
+  if (cfgOn) {
+    const c = m.ui.cfg, el = $("cfg");
+    el.min = c.min; el.max = c.max; el.step = c.step;
+    const k = subKey(m);
+    const v = (S().cfgs && S().cfgs[k] != null) ? S().cfgs[k] : c.default;
+    el.value = v; $("cfgVal").textContent = Number(v).toFixed(2);
+    if (c.help) $("cfgHelp").title = c.help;
+  }
 
   // заметка модели
   const note = m.ui.note; $("modelNote").style.display = note ? "" : "none"; if (note) $("modelNote").textContent = note;
@@ -146,15 +178,26 @@ function renderModel() {
 }
 
 function buildSubmodels() {
-  const base = baseModel(), f = $("fieldSubmodel"), el = $("submodel");
+  const base = baseModel(), f = $("fieldSubmodel"), box = $("submodelCards");
   if (!base.submodels) { f.style.display = "none"; return; }
-  f.style.display = ""; el.innerHTML = "";
+  f.style.display = ""; box.innerHTML = "";
   for (const s of base.submodels) {
-    const o = document.createElement("option"); o.value = s.id; o.textContent = s.label;
-    if (s.id === S().submodel) o.selected = true;
-    el.appendChild(o);
+    const sec = s.pricing?.perSecond?.sec;
+    const feats = [];
+    const hasSwitchAudio = (s.ui.switches || []).some((x) => x.id === "audio");
+    if (s.ui.audioNative) feats.push("🔊 звук");
+    else if (hasSwitchAudio) feats.push("🔊 звук (опц.)");
+    if (s.input?.imageField) feats.push(s.input.endImageField ? "🖼 старт+финал" : "🖼 кадр→видео");
+    feats.push("⏱ " + (s.ui.durationMin === s.ui.durationMax ? s.ui.durationMin : s.ui.durationMin + "–" + s.ui.durationMax) + " c");
+    if (s.ui.resolutions) feats.push("📐 до " + s.ui.resolutions[s.ui.resolutions.length - 1]);
+    const c = document.createElement("div");
+    c.className = "sm-card" + (s.id === S().submodel ? " on" : "");
+    c.innerHTML = `<div class="sm-top"><span class="sm-name">${escapeHtml(s.label)}</span><span class="sm-price">${sec != null ? "$" + sec.toFixed(2) + "/с" : ""}</span></div>` +
+      `<div class="sm-vendor">${escapeHtml(s.vendor || "")}</div>` +
+      `<div class="sm-feats">${feats.map((x) => `<span>${x}</span>`).join("")}</div>`;
+    c.onclick = () => { if (S().submodel === s.id) return; S().submodel = s.id; renderModel(); };
+    box.appendChild(c);
   }
-  el.onchange = () => { S().submodel = el.value; renderModel(); };
 }
 
 function buildModes() {
@@ -186,22 +229,66 @@ function buildTasks() {
 function buildResolutions() {
   const m = M(), f = $("fieldResolution");
   const list = m.ui.modes ? (m.ui.resolutionsByMode?.[S().mode] || []) : (m.ui.resolutions || []);
-  if (!list.length) { f.style.display = "none"; S().resolution = null; return; } // напр. Omni: API не выбирает разрешение
+  // нет выбора (Omni, Kling) — просто прячем поле, НЕ стирая выбор вкладки (иначе клик по Kling сбрасывал 1080p)
+  if (!list.length) { f.style.display = "none"; return; }
   f.style.display = "";
-  if (!list.includes(S().resolution)) S().resolution = list[Math.min(1, list.length - 1)];
+  if (!list.includes(S().resolution)) {
+    const def = (baseModel().defaults || {}).resolution;
+    S().resolution = list.includes(def) ? def : list[Math.min(1, list.length - 1)];
+  }
   const el = $("resolution"); el.innerHTML = "";
   for (const r of list) {
     const meta = RES_META[r] || { tag: "", scale: .6 };
     const c = document.createElement("div"); c.className = "chip" + (r === S().resolution ? " on" : "");
-    c.innerHTML = `<span class="res-box"><i style="height:${Math.round(meta.scale * 18)}px"></i></span><b>${r}</b><span class="res-tag">${meta.tag}</span>`;
-    c.onclick = () => { S().resolution = r; [...el.children].forEach((x) => x.classList.toggle("on", x === c)); updateCost(); };
+    c.dataset.res = r;
+    const hint = resPriceHint(m, S(), r);
+    c.innerHTML = `<span class="res-box"><i style="height:${Math.round(meta.scale * 22)}px"></i></span><b>${r}</b><span class="res-tag">${meta.tag}</span>` +
+      (hint ? `<span class="res-price">${hint}</span>` : "");
+    // через renderModel: смена разрешения может менять допустимую длительность (напр. PixVerse 1080p ≤ 5 c)
+    c.onclick = () => { S().resolution = r; renderModel(); };
     el.appendChild(c);
   }
 }
 
+// тариф $/с для perSecond-моделей: может зависеть от разрешения (byRes) и звука ({on,off}/secAudio)
+function perSecRate(pc, resolution, audio) {
+  let sec = pc.byRes ? pc.byRes[resolution] : undefined;
+  if (sec == null) sec = (audio && pc.secAudio != null) ? pc.secAudio : (pc.sec || 0);
+  else if (typeof sec === "object") sec = audio ? (sec.on ?? 0) : (sec.off ?? 0);
+  return sec;
+}
+function audioOn(m, s) {
+  return !!(m.ui.audioNative || (m.ui.switches || []).some((x) => x.id === "audio" && s.sw[x.id]));
+}
+
+// оценка цены конкретного разрешения при текущих длительности/звуке
+function resPriceHint(m, s, r) {
+  if (m.pricingModel === "perSecond") {
+    const pc = m.pricing.perSecond || {};
+    if (!pc.byRes || pc.byRes[r] == null) return "";
+    return "≈$" + (perSecRate(pc, r, audioOn(m, s)) * Number(s.duration)).toFixed(2);
+  }
+  if (m.pricingModel !== "tokens" || !m.ui.shortSides) return "";
+  const short = m.ui.shortSides[r]; if (!short) return "";
+  let factor = 16 / 9;
+  if (s.aspectRatio !== "adaptive" && s.aspectRatio && s.aspectRatio.includes(":")) {
+    const [a, b] = s.aspectRatio.split(":").map(Number); factor = Math.max(a, b) / Math.min(a, b);
+  }
+  const u = m.pricing.unitPerK[s.mode] && m.pricing.unitPerK[s.mode][r]; if (!u) return "";
+  const perK = s.refs.videos.length ? u.v : u.nv;
+  const tokens = short * short * factor * m.fps * Number(s.duration) / 1024;
+  return "≈$" + (tokens / 1000 * perK).toFixed(2);
+}
+
 function buildAspects() {
   const el = $("aspectRatio"); el.innerHTML = "";
-  for (const ar of M().ui.aspectRatios) {
+  const list = M().ui.aspectRatios;
+  // выбор из другой подмодели может быть недопустим здесь (21:9 → Kling = 422) — приводим к валидному
+  if (!list.includes(S().aspectRatio)) {
+    const def = (baseModel().defaults || {}).aspectRatio;
+    S().aspectRatio = list.includes(def) ? def : list[0];
+  }
+  for (const ar of list) {
     const c = document.createElement("div"); c.className = "chip" + (ar === S().aspectRatio ? " on" : "");
     let shape;
     if (ar === "adaptive") shape = `<span class="ar-shape ar-auto" style="width:16px;height:16px"></span>`;
@@ -234,16 +321,29 @@ function renderPriceTable() {
   if (m.pricingModel === "perSecond") {
     const pc = m.pricing.perSecond;
     let html;
-    if (typeof pc.base === "number") {
+    if (pc.byRes) {
+      const hasAudioCols = Object.values(pc.byRes).some((v) => typeof v === "object");
+      html = hasAudioCols
+        ? "<tr><th>Разрешение</th><th>без звука</th><th>со звуком</th></tr>"
+        : "<tr><th>Разрешение</th><th>за секунду</th></tr>";
+      for (const [res, v] of Object.entries(pc.byRes)) {
+        if (typeof v === "object") html += `<tr><td>${res}</td><td>$${(v.off ?? 0).toFixed(3)}/с</td><td>$${(v.on ?? 0).toFixed(3)}/с</td></tr>`;
+        else html += hasAudioCols ? `<tr><td>${res}</td><td colspan="2">$${v.toFixed(3)}/с</td></tr>` : `<tr><td>${res}</td><td>$${v.toFixed(3)}/с</td></tr>`;
+      }
+    } else if (pc.secAudio != null) {
+      html = "<tr><th>Тариф</th><th>за секунду</th></tr>" +
+        `<tr><td>Без звука</td><td>$${pc.sec.toFixed(3)}/с</td></tr>` +
+        `<tr><td>Со звуком</td><td>$${pc.secAudio.toFixed(3)}/с</td></tr>`;
+    } else if (typeof pc.base === "number") {
       html = "<tr><th>Тариф (оценка)</th><th>значение</th></tr>" +
-        `<tr><td>База за клип</td><td>$${pc.base.toFixed(2)}</td></tr>` +
+        (pc.base > 0 ? `<tr><td>База за клип</td><td>$${pc.base.toFixed(2)}</td></tr>` : "") +
         `<tr><td>За секунду</td><td>$${pc.sec.toFixed(2)}/с</td></tr>`;
     } else {
       html = "<tr><th>Разрешение</th><th>база за клип</th><th>за секунду</th></tr>";
       for (const [res, base] of Object.entries(pc.base)) html += `<tr><td>${res}</td><td>$${base.toFixed(2)}</td><td>$${pc.sec.toFixed(2)}/с</td></tr>`;
     }
     $("priceTable").innerHTML = html;
-    $("priceNote").textContent = "Оценка: платишь по факту за секунды генерации. Реальное списание — по тарифу провайдера.";
+    $("priceNote").textContent = (m.pricing.note ? m.pricing.note + " " : "") + "Платишь по факту за секунды генерации, списание — по тарифу провайдера.";
   } else {
     const t = m.pricing.unitPerK[S().mode] || Object.values(m.pricing.unitPerK)[0];
     let html = "<tr><th>Разрешение</th><th>с видео</th><th>без видео</th></tr>";
@@ -259,8 +359,12 @@ function estimate() {
   if (m.pricingModel === "perSecond") {
     const pc = m.pricing.perSecond;
     const base = typeof pc.base === "number" ? pc.base : (pc.base[s.resolution] ?? Object.values(pc.base)[0] ?? 0);
-    const cost = base + (pc.sec || 0) * Number(s.duration);
-    return { model: "perSecond", cost, label: `база $${base.toFixed(2)} + $${(pc.sec || 0).toFixed(2)}/с × ${s.duration}с` };
+    const sec = perSecRate(pc, s.resolution, audioOn(m, s));
+    const cost = base + sec * Number(s.duration);
+    const label = base > 0
+      ? `база $${base.toFixed(2)} + $${sec.toFixed(2)}/с × ${s.duration}с`
+      : `$${sec.toFixed(2)}/с × ${s.duration}с`;
+    return { model: "perSecond", cost, label };
   }
   const short = m.ui.shortSides[s.resolution] || 720;
   let factor = 16 / 9;
@@ -272,14 +376,28 @@ function estimate() {
   return { model: "tokens", tokens, cost: tokens / 1000 * perK, hasVid };
 }
 function updateCost() {
-  const e = estimate();
-  if (e.model === "perSecond") { $("costTok").textContent = "≈ " + e.label + " · нативный звук"; }
-  else { $("costTok").textContent = "≈ " + e.tokens.toLocaleString("ru") + " ток. · " + (e.hasVid ? "с видео-рефом" : "без видео-входа"); }
+  const m = M(), e = estimate();
+  if (e.model === "perSecond") {
+    const hasAud = m.ui.audioNative || (m.ui.switches || []).some((x) => x.id === "audio" && S().sw[x.id]);
+    $("costTok").textContent = "≈ " + e.label + (hasAud ? " · со звуком" : "");
+  } else {
+    $("costTok").textContent = "≈ " + e.tokens.toLocaleString("ru") + " ток. · " + (e.hasVid ? "с видео-рефом" : "без видео-входа");
+  }
   $("costUsd").textContent = "≈ $" + e.cost.toFixed(2);
+  // обновить ценники на чипах разрешений (зависят от длительности/формата/рефов)
+  document.querySelectorAll("#resolution .chip").forEach((ch) => {
+    const el = ch.querySelector(".res-price");
+    if (el) el.textContent = resPriceHint(m, S(), ch.dataset.res);
+  });
 }
 
 // ── референсы (используют активную вкладку) ─────────────────
-function readFiles(files, cb) { for (const f of files) { const r = new FileReader(); r.onload = () => cb(r.result); r.readAsDataURL(f); } }
+// читаем файлы, СОХРАНЯЯ порядок выбора (порядок важен: у Kling 1-я = старт, 2-я = финал; @Image1..N)
+function readFiles(files, cb) {
+  Promise.all([...files].map((f) => new Promise((res) => {
+    const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(f);
+  }))).then((results) => { for (const d of results) if (d) cb(d); });
+}
 const REFCFG = [
   ["img", "images", "inImg", "addImg", "thImg", "limImg", "@Image"],
   ["vid", "videos", "inVid", "addVid", "thVid", "limVid", "@Video"],
@@ -314,7 +432,8 @@ function setupRefs() {
 function renderRefs(kind, key, thId, limId, addId, tag) {
   const limit = M().ui.refLimits[key] || 0;
   const arr = S().refs[key];
-  const limEl = $(limId); limEl.textContent = `${arr.length}/${limit}` + (kind === "vid" ? " · ≤720p" : "");
+  const limEl = $(limId); limEl.textContent = `${arr.length}/${limit}` + (kind === "vid" ? " · ≤720p" : "") + (arr.length > limit ? " — лишние не отправятся" : "");
+  limEl.style.color = arr.length > limit ? "var(--orange)" : "";
   $(addId).disabled = arr.length >= limit;
   const box = $(thId); box.innerHTML = "";
   arr.forEach((d, i) => {
@@ -340,8 +459,13 @@ function refreshRefsUI() {
     $("specImg").textContent = "1–7 картинок · JPG·PNG·WEBP · 1 → кадр→видео, несколько → референс→видео";
     $("refsHint").innerHTML = "Omni берёт только картинки-рефы. Опиши в промпте, что с ними сделать. Звук модель добавит сама.";
   } else if (m.provider === "fal") {
-    $("specImg").textContent = "1 картинка → image-to-video · JPG·PNG·WEBP · файлом или публичным URL";
-    $("refsHint").innerHTML = "fal берёт одну картинку-реф для image-to-video (у моделей, где это есть). Опиши в промпте, что с ней сделать.";
+    const lim = (m.ui.refLimits && m.ui.refLimits.images) || 0;
+    $("specImg").textContent = (lim === 2
+      ? "до 2 картинок: 1-я — стартовый кадр, 2-я — финальный"
+      : "1 картинка → image-to-video") + " · JPG·PNG·WEBP · файлом или URL";
+    $("refsHint").innerHTML = lim === 2
+      ? "Kling: 1-я картинка — стартовый кадр, 2-я (опционально) — финальный. Опиши в промпте переход между ними."
+      : "fal берёт одну картинку-реф для image-to-video (у моделей, где это есть). Опиши в промпте, что с ней сделать.";
   } else {
     $("specImg").textContent = "Ш×В 300–6000 px · ≤30 МБ · JPG·PNG·WEBP · можно файлом";
     if (CFG.tosEnabled) {
@@ -374,7 +498,12 @@ function bindGen() {
       mode: s.mode, task: s.task, resolution: s.resolution, aspectRatio: s.aspectRatio,
       duration: Number(s.duration), seed: s.seed || undefined,
       audio: !!s.sw.audio, watermark: !!s.sw.watermark, returnLastFrame: !!s.sw.returnLastFrame,
-      images: s.refs.images, videos: s.refs.videos, audios: s.refs.audios,
+      negativePrompt: m.ui.negative ? $("negative").value : undefined,
+      cfgScale: m.ui.cfg ? Number($("cfg").value) : undefined,
+      // шлём только рефы, которые текущая (под)модель реально принимает — остатки от другой подмодели не утекают
+      images: (m.ui.refKinds || []).includes("img") ? s.refs.images.slice(0, m.ui.refLimits.images || 0) : [],
+      videos: (m.ui.refKinds || []).includes("vid") ? s.refs.videos.slice(0, m.ui.refLimits.videos || 0) : [],
+      audios: (m.ui.refKinds || []).includes("aud") ? s.refs.audios.slice(0, m.ui.refLimits.audios || 0) : [],
     };
     try {
       const r = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -505,6 +634,9 @@ async function repeat(id) {
   if (e.params.aspectRatio) st.aspectRatio = e.params.aspectRatio;
   if (e.params.duration) st.duration = e.params.duration;
   st.seed = e.params.seed || "";
+  const pk = e.params.submodel || mid;
+  if (e.params.negativePrompt != null) { st.negs = st.negs || {}; st.negs[pk] = e.params.negativePrompt; }
+  if (e.params.cfgScale != null) { st.cfgs = st.cfgs || {}; st.cfgs[pk] = e.params.cfgScale; }
   st.sw = st.sw || {};
   const subUi = m.submodels ? (m.submodels.find((s) => s.id === st.submodel) || m.submodels[0]).ui : m.ui;
   for (const sw of (subUi.switches || [])) st.sw[sw.id] = !!e.params[sw.id];
@@ -523,9 +655,11 @@ const ACCENTS = [
 const SK = "sd_skin", AK = "sd_accent", FK = "sd_fx", FS = "sd_fs";
 function getFx() { try { return JSON.parse(localStorage.getItem(FK)) || { scanlines: true, grid: true, glow: true }; } catch { return { scanlines: true, grid: true, glow: true }; } }
 function applyAppearance() {
-  const skin = localStorage.getItem(SK) || "neural";
+  // «auto» (по умолчанию) следует за системной темой: светлая → белый скин, тёмная → Neural
+  const pref = localStorage.getItem(SK) || "auto";
+  const skin = pref === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "neural") : pref;
   document.documentElement.setAttribute("data-skin", skin);
-  document.querySelectorAll("#skinGroup button").forEach((b) => b.classList.toggle("on", b.dataset.skin === skin));
+  document.querySelectorAll("#skinGroup button").forEach((b) => b.classList.toggle("on", b.dataset.skin === pref));
   $("hudFxField").style.display = skin === "neural" ? "" : "none";
   const root = document.documentElement;
   let acc = null; try { acc = JSON.parse(localStorage.getItem(AK)); } catch {}
@@ -542,7 +676,7 @@ function applyAppearance() {
   const fs = Number(localStorage.getItem(FS) || 100);
   document.querySelector(".wrap").style.zoom = fs / 100;
   $("fontSize").value = fs; $("fsVal").textContent = fs + "%";
-  const cs = Number(localStorage.getItem("sd_card") || 280);
+  const cs = Number(localStorage.getItem("sd_card") || 340);
   document.documentElement.style.setProperty("--gallery-min", cs + "px");
   $("cardSize").value = cs; $("cardVal").textContent = cs + "px";
 }
@@ -555,6 +689,10 @@ function setupAppearance() {
     sw.appendChild(s);
   }
   $("skinGroup").querySelectorAll("button").forEach((b) => b.onclick = () => { localStorage.setItem(SK, b.dataset.skin); applyAppearance(); });
+  // в режиме «Авто» перекрашиваемся сразу при смене системной темы
+  matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyAppearance);
+  // страховка для WebView: если смена темы случилась, пока окно было в фоне
+  window.addEventListener("focus", applyAppearance);
   document.querySelectorAll(".switch[data-fx]").forEach((el) => el.onclick = () => { const fx = getFx(); const k = el.dataset.fx; fx[k] = !fx[k]; localStorage.setItem(FK, JSON.stringify(fx)); applyAppearance(); });
   $("fontSize").oninput = () => { localStorage.setItem(FS, $("fontSize").value); applyAppearance(); };
   $("cardSize").oninput = () => { localStorage.setItem("sd_card", $("cardSize").value); applyAppearance(); };
@@ -562,8 +700,66 @@ function setupAppearance() {
   $("apprBtn").onclick = () => drawer(!$("apprPanel").classList.contains("open"));
   $("apprClose").onclick = () => drawer(false);
   $("apprOverlay").onclick = () => drawer(false);
+  const updDrawer = (o) => { $("updPanel").classList.toggle("open", o); $("updOverlay").classList.toggle("open", o); };
+  $("updBtn").onclick = () => { updDrawer(true); if (UPD_CACHE) renderUpdateReport(UPD_CACHE); else runUpdateCheck(); };
+  $("updClose").onclick = () => updDrawer(false);
+  $("updOverlay").onclick = () => updDrawer(false);
+  $("updRun").onclick = () => runUpdateCheck();
   $("budget").onchange = async () => { await fetch("/api/budget", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: active, budget: Number($("budget").value) || 0 }) }); loadGallery(); };
   applyAppearance();
+}
+
+// ── актуальность моделей: сверка config.json с живыми схемами API ──
+let UPD_CACHE = null;
+const UPD_ICON = { ok: "✅", warn: "⚠️", update: "🆕", outdated: "⛔", error: "⛔", skip: "➖", manual: "✋" };
+function updHasNews(rep) {
+  return (rep.fal || []).some((x) => x.status !== "ok") || (rep.omni && !["ok", "skip"].includes(rep.omni.status));
+}
+function markUpdBtn(rep) { $("updBtn").classList.toggle("attn", updHasNews(rep)); }
+async function runUpdateCheck() {
+  const box = $("updResults");
+  box.innerHTML = '<div class="upd-stamp"><span class="spin"></span> Опрашиваю fal и Google — секунд десять…</div>';
+  try {
+    const r = await fetch("/api/check-updates");
+    const rep = await r.json();
+    if (!r.ok) throw new Error(rep.error || "ошибка сервера");
+    UPD_CACHE = rep;
+    localStorage.setItem("updCheckAt", String(Date.now()));
+    renderUpdateReport(rep); markUpdBtn(rep);
+  } catch (e) { box.innerHTML = `<div class="upd-stamp">Ошибка проверки: ${escapeHtml(e.message)}</div>`; }
+}
+function renderUpdateReport(rep) {
+  let html = `<div class="upd-stamp">Проверено: ${new Date(rep.checkedAt).toLocaleString("ru")}</div>`;
+  for (const e of rep.fal || []) {
+    html += `<div class="upd-item"><div class="upd-name">${UPD_ICON[e.status] || "·"} ${escapeHtml(e.label)}</div>` +
+      `<div class="upd-ep">${escapeHtml(e.endpoint)}</div>`;
+    const li = [
+      ...(e.issues || []).map((i) => `<li>${escapeHtml(i)}</li>`),
+      ...(e.newer || []).map((n) => `<li class="new">вышла новее: ${escapeHtml(n)}</li>`),
+    ];
+    if (li.length) html += `<ul>${li.join("")}</ul>`;
+    html += `</div>`;
+  }
+  if (rep.omni) {
+    html += `<div class="upd-item"><div class="upd-name">${UPD_ICON[rep.omni.status] || "·"} Google Omni</div>` +
+      (rep.omni.model ? `<div class="upd-ep">${escapeHtml(rep.omni.model)}</div>` : "") +
+      `<ul><li>${escapeHtml(rep.omni.note || "")}</li>${(rep.omni.candidates || []).map((c) => `<li>доступна также: ${escapeHtml(c)}</li>`).join("")}</ul></div>`;
+  }
+  if (rep.byteplus) {
+    html += `<div class="upd-item"><div class="upd-name">✋ Seedance (BytePlus)</div>` +
+      `<ul><li>${escapeHtml(rep.byteplus.note)}</li><li><a href="${rep.byteplus.url}" target="_blank" rel="noopener">Открыть консоль BytePlus</a></li></ul></div>`;
+  }
+  $("updResults").innerHTML = html;
+}
+// раз в сутки — тихая фоновая сверка; при находках подсвечиваем кнопку «Модели»
+function autoUpdateCheck() {
+  if (Date.now() - Number(localStorage.getItem("updCheckAt") || 0) < 864e5) return;
+  fetch("/api/check-updates").then((r) => r.json()).then((rep) => {
+    if (!rep || !rep.fal) return;
+    UPD_CACHE = rep;
+    localStorage.setItem("updCheckAt", String(Date.now()));
+    markUpdBtn(rep);
+  }).catch(() => {});
 }
 
 // промпт: авто-высота под текст + запоминаем ручное растягивание, пишем в состояние вкладки
