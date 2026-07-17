@@ -164,6 +164,27 @@
           }
         },
         {
+          "id": "kling4k",
+          "label": "Kling V3 4K",
+          "vendor": "Kuaishou",
+          "endpoint": "fal-ai/kling-video/v3/4k/image-to-video",
+          "pricingModel": "perSecond",
+          "pricing": { "note": "fal: $0.42/с (фикс, 4K). Только кадр→видео.", "perSecond": { "base": 0, "sec": 0.42 }, "packs": {} },
+          "input": { "durationFormat": "plain", "aspect": false, "resolution": false, "audioField": "generate_audio", "negativeField": true, "negativeDefault": "blur, distort, and low quality", "cfgScale": 0.5, "imageField": "start_image_url", "endImageField": "end_image_url", "seedField": false },
+          "ui": {
+            "durationMin": 3, "durationMax": 15, "durationStep": 1,
+            "aspectRatios": [],
+            "resFixed": "4K",
+            "refKinds": ["img"], "refLimits": { "images": 2 },
+            "imageRequired": true,
+            "switches": [ { "id": "audio", "label": "Нативный звук", "help": "Kling V3 генерит звук в один проход (generate_audio).", "default": true } ],
+            "seed": false,
+            "negative": true, "negativeDefault": "blur, distort, and low quality",
+            "cfg": { "min": 0, "max": 1, "step": 0.05, "default": 0.5, "help": "Насколько строго следовать промпту: меньше — свободнее и живее, больше — буквальнее." },
+            "note": "Kling V3 4K — выход в 4K, ТОЛЬКО кадр→видео: нужен стартовый кадр (2-я картинка опц. — финальный). Формат задаёт картинка. Дороже обычного: $0.42/с."
+          }
+        },
+        {
           "id": "seedance2",
           "label": "Seedance 2.0",
           "vendor": "ByteDance",

@@ -1,5 +1,7 @@
 const $ = (id) => document.getElementById(id);
-let CFG = null, polling = null;
+let CFG = null;
+const activeJobs = new Set();   // id задач в работе (параллельно)
+let jobTimer = null;            // общий опрос всех активных задач
 const MODELS = {};        // id -> модель (публичный вид с сервера)
 let ORDER = [];           // порядок вкладок
 let active = null;        // id активной модели
@@ -190,6 +192,7 @@ function buildSubmodels() {
     if (s.input?.imageField) feats.push(s.input.endImageField ? "🖼 старт+финал" : "🖼 кадр→видео");
     feats.push("⏱ " + (s.ui.durationMin === s.ui.durationMax ? s.ui.durationMin : s.ui.durationMin + "–" + s.ui.durationMax) + " c");
     if (s.ui.resolutions) feats.push("📐 до " + s.ui.resolutions[s.ui.resolutions.length - 1]);
+    else if (s.ui.resFixed) feats.push("📐 " + s.ui.resFixed);
     const c = document.createElement("div");
     c.className = "sm-card" + (s.id === S().submodel ? " on" : "");
     c.innerHTML = `<div class="sm-top"><span class="sm-name">${escapeHtml(s.label)}</span><span class="sm-price">${sec != null ? "$" + sec.toFixed(2) + "/с" : ""}</span></div>` +
@@ -282,7 +285,10 @@ function resPriceHint(m, s, r) {
 
 function buildAspects() {
   const el = $("aspectRatio"); el.innerHTML = "";
-  const list = M().ui.aspectRatios;
+  const list = M().ui.aspectRatios || [];
+  // пусто — формат задаёт входная картинка (напр. Kling 4K, только кадр→видео): прячем блок
+  if (!list.length) { $("fieldAspect").style.display = "none"; return; }
+  $("fieldAspect").style.display = "";
   // выбор из другой подмодели может быть недопустим здесь (21:9 → Kling = 422) — приводим к валидному
   if (!list.includes(S().aspectRatio)) {
     const def = (baseModel().defaults || {}).aspectRatio;
@@ -392,10 +398,31 @@ function updateCost() {
 }
 
 // ── референсы (используют активную вкладку) ─────────────────
+// ужать крупную картинку прямо в браузере: провайдеры (особенно fal) давятся мега-base64 —
+// оригинал 17 МБ давал у fal «Failed to load the image». Кап по большей стороне + пере-JPEG.
+function downscaleImage(dataUrl, maxSide = 2048, quality = 0.9) {
+  return new Promise((res) => {
+    if (!/^data:image\//i.test(dataUrl)) return res(dataUrl); // http-URL или не картинка — как есть
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth, h = img.naturalHeight, scale = Math.min(1, maxSide / Math.max(w, h));
+      if (scale >= 1 && dataUrl.length < 1_500_000) return res(dataUrl); // уже небольшая — не трогаем
+      const cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+      const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+      c.getContext("2d").drawImage(img, 0, 0, cw, ch);
+      try { res(c.toDataURL("image/jpeg", quality)); } catch { res(dataUrl); }
+    };
+    img.onerror = () => res(dataUrl);
+    img.src = dataUrl;
+  });
+}
 // читаем файлы, СОХРАНЯЯ порядок выбора (порядок важен: у Kling 1-я = старт, 2-я = финал; @Image1..N)
-function readFiles(files, cb) {
+function readFiles(files, cb, isImg) {
   Promise.all([...files].map((f) => new Promise((res) => {
-    const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(f);
+    const r = new FileReader();
+    r.onload = async () => res(isImg ? await downscaleImage(r.result) : r.result);
+    r.onerror = () => res(null);
+    r.readAsDataURL(f);
   }))).then((results) => { for (const d of results) if (d) cb(d); });
 }
 const REFCFG = [
@@ -407,7 +434,7 @@ function addFiles(files, kind, key, thId, limId, addId, tag) {
   const limit = M().ui.refLimits[key]; if (!limit) return;
   const accept = kind === "img" ? "image/" : kind === "vid" ? "video/" : "audio/";
   const ok = [...files].filter((f) => !f.type || f.type.startsWith(accept));
-  readFiles(ok, (d) => { const arr = S().refs[key]; if (arr.length < limit) { arr.push(d); renderRefs(kind, key, thId, limId, addId, tag); } });
+  readFiles(ok, (d) => { const arr = S().refs[key]; if (arr.length < limit) { arr.push(d); renderRefs(kind, key, thId, limId, addId, tag); } }, kind === "img");
 }
 function setupRefs() {
   for (const [kind, key, inId, addId, thId, limId, tag] of REFCFG) {
@@ -490,12 +517,17 @@ function bindGen() {
     if (!m.keyPresent) return setStatus(`Нет ключа для «${m.label}» — впиши ${m.apiKeyEnv} в .env и перезапусти сервер.`, "err");
     if (m.provider === "byteplus" && s.refs.audios.length && !s.refs.images.length && !s.refs.videos.length)
       return setStatus("Аудио-реф нельзя без картинки или видео-рефа — добавь хотя бы один кадр.", "err");
-    if (polling) clearInterval(polling);
-    $("gen").disabled = true;
+    // модели без text-to-video (напр. Kling 4K) требуют стартовый кадр
+    if (m.ui.imageRequired && !(s.refs.images || []).length)
+      return setStatus(`«${m._sub?.label || m.label}» — только кадр→видео: добавь стартовую картинку-реф ниже.`, "err");
+    $("gen").disabled = true; // только на время отправки — чтобы один клик не задвоил задачу
     setStatus('<span class="spin"></span> Отправляю задачу…');
     const payload = {
       model: active, submodel: s.submodel, prompt,
-      mode: s.mode, task: s.task, resolution: s.resolution, aspectRatio: s.aspectRatio,
+      mode: s.mode, task: s.task,
+      // шлём только то, что модель реально использует — иначе в карточке висят чужие теги (напр. 1080p/16:9 у Kling 4K)
+      resolution: ((m.ui.resolutions && m.ui.resolutions.length) || m.ui.modes) ? s.resolution : undefined,
+      aspectRatio: (m.ui.aspectRatios && m.ui.aspectRatios.length) ? s.aspectRatio : undefined,
       duration: Number(s.duration), seed: s.seed || undefined,
       audio: !!s.sw.audio, watermark: !!s.sw.watermark, returnLastFrame: !!s.sw.returnLastFrame,
       negativePrompt: m.ui.negative ? $("negative").value : undefined,
@@ -509,28 +541,37 @@ function bindGen() {
       const r = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "ошибка");
+      trackJob(data.jobId);   // задача ушла в фон — сразу можно ставить следующую (хоть с другой модели)
       loadGallery();
-      pollJob(data.jobId);
-    } catch (e) { $("gen").disabled = false; setStatus("Ошибка: " + e.message, "err"); }
+    } catch (e) { setStatus("Ошибка: " + e.message, "err"); }
+    finally { $("gen").disabled = false; } // кнопка снова активна немедленно — параллельные задачи разрешены
   };
 }
-function pollJob(jobId) {
-  const started = Date.now();
-  setStatus('<span class="spin"></span> Рендер… (0c)');
-  polling = setInterval(async () => {
-    const sec = Math.round((Date.now() - started) / 1000);
+
+// ── параллельные задачи: несколько рендеров одновременно, каждый крутится в своей карточке ──
+// сервер уже независим (у каждой задачи свой job id); двигает вперёд именно /api/job/{id},
+// поэтому опрашиваем каждую активную задачу, а карточки обновляем общим loadGallery().
+function trackJob(id) { activeJobs.add(id); startJobPoller(); updateActiveStatus(); }
+function updateActiveStatus() {
+  const n = activeJobs.size;
+  setStatus(n ? `<span class="spin"></span> В работе: ${n} · можно ставить ещё` : "", n ? "" : "ok");
+}
+function startJobPoller() {
+  if (jobTimer) return;
+  jobTimer = setInterval(pollActive, 3000);
+  pollActive();
+}
+async function pollActive() {
+  if (!activeJobs.size) { clearInterval(jobTimer); jobTimer = null; return; }
+  await Promise.all([...activeJobs].map(async (id) => {
     try {
-      const st = await (await fetch("/api/job/" + encodeURIComponent(jobId))).json();
-      if (st.state === "completed") {
-        clearInterval(polling); polling = null; $("gen").disabled = false;
-        const c = st.cost != null ? ` · $${st.cost.toFixed(2)}${st.tokens ? ` (${st.tokens.toLocaleString("ru")} ток.)` : ""}` : "";
-        setStatus("Готово за " + sec + "c" + c, "ok"); loadGallery();
-      } else if (st.state === "failed") {
-        clearInterval(polling); polling = null; $("gen").disabled = false;
-        setStatus("Не удалось: " + (st.error || "unknown"), "err"); loadGallery();
-      } else { setStatus('<span class="spin"></span> Рендер… (' + sec + "c)"); loadGallery(); }
-    } catch (e) { clearInterval(polling); polling = null; $("gen").disabled = false; setStatus("Ошибка: " + e.message, "err"); }
-  }, 3000);
+      const st = await (await fetch("/api/job/" + encodeURIComponent(id))).json();
+      if (st.state === "completed" || st.state === "failed") activeJobs.delete(id); // терминальное — снимаем с опроса
+    } catch { /* сеть моргнула — повторим на следующем тике */ }
+  }));
+  loadGallery();          // карточки покажут актуальные статусы/готовые видео
+  updateActiveStatus();
+  if (!activeJobs.size) { clearInterval(jobTimer); jobTimer = null; }
 }
 
 // ── учёт расходов по движку (карточка «Счёт») ───────────────
@@ -580,9 +621,18 @@ function renderAccount(data) {
 }
 
 // ── общая лента результатов (все модели) ────────────────────
+let gallerySig = null; // подпись содержимого — чтобы не пересобирать карточки (и не мигать превью) без изменений
 async function loadGallery() {
   const data = await (await fetch("/api/history")).json();
   renderAccount(data);
+  // подхватить незавершённые рендеры (напр. после перезапуска приложения) — пусть сами возобновят опрос
+  for (const it of data.items) if (it.status === "pending" && !activeJobs.has(it.id)) trackJob(it.id);
+
+  // пересобираем DOM только если реально что-то поменялось (id/статус/наличие видео/цена).
+  // Иначе поллинг каждые 3 c пересоздавал <video>, и постер-кадр мигал.
+  const sig = data.items.map((it) => `${it.id}:${it.status}:${it.hasVideo ? 1 : 0}:${it.cost ?? ""}`).join("|");
+  if (sig === gallerySig) return;
+  gallerySig = sig;
 
   const g = $("gallery");
   if (!data.items.length) { g.innerHTML = '<div class="empty">Пока пусто — сгенерируй первое видео.</div>'; return; }
@@ -590,7 +640,8 @@ async function loadGallery() {
   for (const it of data.items) {
     const pr = it.params || {};
     const media = it.hasVideo
-      ? `<video src="/api/media/${it.id}.mp4" controls loop preload="metadata"></video>`
+      // #t=0.1 — медиа-фрагмент: браузер подтягивает кадр на 0.1 c и показывает его как превью/постер (иначе чёрный прямоугольник до запуска)
+      ? `<video src="/api/media/${it.id}.mp4#t=0.1" controls loop playsinline preload="metadata"></video>`
       : `<div class="ph">${it.status === "pending" ? '<span class="spin"></span> рендер…' : "⚠ ошибка"}</div>`;
     const refStr = [it.refCounts.images && `🖼${it.refCounts.images}`, it.refCounts.videos && `🎬${it.refCounts.videos}`, it.refCounts.audios && `🎵${it.refCounts.audios}`].filter(Boolean).join(" ");
     const modelTag = `<span class="vtag model">${escapeHtml(it.modelLabel || it.model)}</span>`;

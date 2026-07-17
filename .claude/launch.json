@@ -5,7 +5,7 @@
       "name": "seedance",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.mjs"],
-      "port": 5178,
+      "port": 5265,
       "autoPort": true
     }
   ]
