@@ -217,7 +217,19 @@ function falClient({ apiKey, conn, model }) {
       const stRaw = await httpJson(id + "/status", { headers });
       const st = String(stRaw.status || "").toUpperCase();
       if (st === "COMPLETED" || st === "OK") {
-        const out = await httpJson(id, { headers });
+        // Точный URL результата fal кладёт в response_url ответа /status. У мультиэндпоинтных приложений
+        // (напр. Kling) сохранённый submit-URL укорочен до семейства и для результата даёт 404 — берём из статуса.
+        const resultUrl = stRaw.response_url || id;
+        let out;
+        try { out = await httpJson(resultUrl, { headers }); }
+        catch (e) {
+          // fal кладёт настоящую причину в detail (напр. «Failed to load the image») — показываем её, а не «недоступен»
+          const d = e.body?.detail;
+          const real = Array.isArray(d) ? d.map((x) => x?.msg || x).filter(Boolean).join("; ") : (typeof d === "string" ? d : null);
+          if (real) return { state: "failed", error: `fal: ${real}`, raw: e.body };
+          if (e.status === 404) return { state: "failed", error: "fal: результат истёк из очереди (не успели забрать) — сгенерируй заново.", raw: e.body || null };
+          return { state: "failed", error: `fal: результат недоступен (HTTP ${e.status || "?"})`, raw: e.body || null };
+        }
         const videoUrl = out.video?.url || out.output?.video?.url || out.video_url;
         if (videoUrl) return { state: "completed", videoUrl, tokens: null, raw: out };
         return { state: "failed", error: out.detail || out.error || "fal: в результате нет video.url", raw: out };

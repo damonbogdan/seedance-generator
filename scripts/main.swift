@@ -1,12 +1,15 @@
 import Cocoa
 import WebKit
 
-let PORT = 5178
+// Свой уникальный порт: 5178 делил с Vite-сервером Clay Studio → оболочка грузила чужой UI.
+let PORT = 5265
 // Единый первоисточник: приложение всегда запускает сервер из рабочей git-папки,
 // поэтому любая наша правка кода попадает в приложение при следующем запуске.
 let PROJECT = "/Users/dimonbogdanov/Claude/seedance-generator"
 let NODE = "/usr/local/bin/node"
-let APP_URL = "http://localhost:\(PORT)"
+// 127.0.0.1, а не localhost: localhost на macOS резолвится в IPv6 ::1, и туда мог сесть чужой сервер;
+// наш сервер и portOpen() работают по IPv4 127.0.0.1 — грузим ровно его.
+let APP_URL = "http://127.0.0.1:\(PORT)"
 
 func portOpen() -> Bool {
     let s = socket(AF_INET, SOCK_STREAM, 0)

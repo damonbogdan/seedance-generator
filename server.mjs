@@ -27,7 +27,7 @@ loadEnv();
 const config = JSON.parse(readFileSync(path.join(__dirname, "config.json"), "utf8"));
 let APP_VERSION = "0.0.0";
 try { APP_VERSION = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")).version || APP_VERSION; } catch {}
-const PORT = Number(process.env.PORT || 5178);
+const PORT = Number(process.env.PORT || 5265); // свой порт: 5178 конфликтовал с Vite Clay Studio
 
 const STORAGE = config.storageDir.replace(/^~/, os.homedir());
 await mkdir(STORAGE, { recursive: true });
